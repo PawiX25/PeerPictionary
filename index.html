@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>P2P Drawing Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        #container {
+            display: flex;
+            gap: 20px;
+        }
+        #chat {
+            height: 400px;
+            width: 200px;
+            border: 1px solid black;
+            overflow-y: scroll;
+        }
+        #connection-panel {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="connection-panel">
+        <button id="createBtn">Create Game</button>
+        <input id="joinInput" placeholder="Enter game code">
+        <button id="joinBtn">Join Game</button>
+        <div id="gameCode"></div>
+    </div>
+    <div id="container">
+        <div>
+            <canvas id="canvas" width="800" height="400"></canvas>
+            <div id="word-display"></div>
+        </div>
+        <div>
+            <div id="chat"></div>
+            <input type="text" id="guess-input" placeholder="Type your guess">
+        </div>
+    </div>
+    <script src="client.js"></script>
+</body>
+</html>
