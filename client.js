@@ -8,6 +8,7 @@ let currentWord = null;
 let recentColors = ['#000000'];
 const maxRecentColors = 8;
 const recentColorsContainer = document.getElementById('recent-colors');
+let username = '';
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -21,6 +22,10 @@ const gameCode = document.getElementById('gameCode');
 const colorPicker = document.getElementById('colorPicker');
 const brushSize = document.getElementById('brushSize');
 const brushSizeValue = document.getElementById('brushSizeValue');
+const usernameInput = document.getElementById('usernameInput');
+const usernameBtn = document.getElementById('usernameBtn');
+const usernamePanel = document.getElementById('username-panel');
+const connectionPanel = document.getElementById('connection-panel');
 
 createBtn.onclick = createGame;
 joinBtn.onclick = joinGame;
@@ -41,19 +46,27 @@ guessInput.addEventListener('keypress', (e) => {
         const guess = guessInput.value;
         if (isHost) {
             if (guess.toLowerCase() === currentWord.toLowerCase()) {
-                addChatMessage(`Correct! The word was: ${currentWord}`);
+                addChatMessage(`Correct! ${username} guessed the word: ${currentWord}`);
                 setTimeout(nextRound, 3000);
             }
         } else {
             sendData({
                 type: 'guess',
-                guess: guess
+                guess: guess,
+                username: username
             });
         }
-        addChatMessage(`${isHost ? 'You' : 'Guest'}: ${guess}`);
         guessInput.value = '';
     }
 });
+
+usernameBtn.onclick = () => {
+    if (usernameInput.value.trim()) {
+        username = usernameInput.value.trim();
+        usernamePanel.classList.add('hidden');
+        connectionPanel.classList.remove('hidden');
+    }
+};
 
 function updateStatus(message) {
     addChatMessage(`<i class="fas fa-info-circle text-blue-500"></i> ${message}`);
@@ -95,7 +108,10 @@ function joinGame() {
 
 function setupConnection() {
     conn.on('open', () => {
-        addChatMessage('Connected to peer!');
+        sendData({
+            type: 'user_info',
+            username: username
+        });
         updateStatus('Connected!');
     });
     
@@ -115,14 +131,19 @@ function handleMessage(data) {
                 drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
             }
             break;
+        case 'user_info':
+            addChatMessage(`${data.username} joined the game!`);
+            break;
         case 'guess':
             if (isHost && data.guess.toLowerCase() === currentWord.toLowerCase()) {
                 sendData({
                     type: 'correct_guess',
-                    word: currentWord
+                    word: currentWord,
+                    username: data.username
                 });
                 setTimeout(nextRound, 3000);
             }
+            addChatMessage(`${data.username}: ${data.guess}`);
             break;
         case 'correct_guess':
             addChatMessage(`Correct! The word was: ${data.word}`);
