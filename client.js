@@ -1,11 +1,5 @@
-const configuration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' }
-    ]
-};
-
-let peerConnection = null;
-let dataChannel = null;
+let peer = null;
+let conn = null;
 let isHost = false;
 let isDrawer = false;
 let isDrawing = false;
@@ -53,120 +47,56 @@ function updateStatus(message) {
     addChatMessage(`Connection: ${message}`);
 }
 
-async function createGame() {
+function generateGameCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+function createGame() {
     isHost = true;
     isDrawer = true;
-    setupPeerConnection();
+    const gameId = generateGameCode();
     
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    peer = new Peer(gameId);
+    peer.on('open', () => {
+        gameCode.textContent = `Game Code: ${gameId}`;
+        updateStatus('Waiting for player to join...');
+    });
     
-    const gameState = {
-        offer: offer,
-        candidates: []
-    };
-    
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            gameState.candidates.push(event.candidate);
-            const gameId = btoa(JSON.stringify(gameState));
-            gameCode.textContent = `Game Code: ${gameId}`;
-        }
-    };
-    
-    currentWord = getRandomWord();
-    wordDisplay.textContent = `Draw: ${currentWord}`;
-    updateStatus('Waiting for player to join...');
+    peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnection();
+        currentWord = getRandomWord();
+        wordDisplay.textContent = `Draw: ${currentWord}`;
+    });
 }
 
-async function joinGame() {
-    try {
-        const gameId = joinInput.value;
-        if (!gameId) return;
-        
-        setupPeerConnection();
-        
-        const gameState = JSON.parse(atob(gameId));
-        
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(gameState.offer));
-        
-        for (const candidate of gameState.candidates) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-        
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        const answerData = {
-            answer: answer,
-            candidates: []
-        };
-        
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                answerData.candidates.push(event.candidate);
-                const answerCode = btoa(JSON.stringify(answerData));
-                gameCode.textContent = `Your Answer Code (give this to host): ${answerCode}`;
-            }
-        };
-        
-        updateStatus('Connected! Waiting for game to start...');
-    } catch (err) {
-        updateStatus(`Error joining: ${err.message}`);
-    }
+function joinGame() {
+    const gameId = joinInput.value;
+    if (!gameId) return;
+    
+    peer = new Peer();
+    peer.on('open', () => {
+        conn = peer.connect(gameId);
+        setupConnection();
+    });
 }
 
-function setupPeerConnection() {
-    peerConnection = new RTCPeerConnection(configuration);
-    
-    if (isHost) {
-        dataChannel = peerConnection.createDataChannel('gameChannel');
-        setupDataChannel();
-    } else {
-        peerConnection.ondatachannel = (event) => {
-            dataChannel = event.channel;
-            setupDataChannel();
-        };
-    }
-    
-    peerConnection.onconnectionstatechange = () => {
-        updateStatus(`Connection state: ${peerConnection.connectionState}`);
-    };
-}
-
-document.body.insertAdjacentHTML('beforeend', `
-    <div id="answer-panel" style="margin-top: 20px;">
-        <input id="answerInput" placeholder="Enter answer code">
-        <button id="submitAnswer">Submit Answer</button>
-    </div>
-`);
-
-document.getElementById('submitAnswer').onclick = async () => {
-    if (!isHost) return;
-    
-    try {
-        const answerData = JSON.parse(atob(document.getElementById('answerInput').value));
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answerData.answer));
-        
-        for (const candidate of answerData.candidates) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-        updateStatus('Answer accepted! Connection establishing...');
-    } catch (err) {
-        updateStatus(`Error processing answer: ${err.message}`);
-    }
-};
-
-function setupDataChannel() {
-    dataChannel.onmessage = handleMessage;
-    dataChannel.onopen = () => {
+function setupConnection() {
+    conn.on('open', () => {
         addChatMessage('Connected to peer!');
-    };
+        updateStatus('Connected!');
+    });
+    
+    conn.on('data', handleMessage);
 }
 
-function handleMessage(event) {
-    const data = JSON.parse(event.data);
-    
+function sendData(data) {
+    if (conn && conn.open) {
+        conn.send(data);
+    }
+}
+
+function handleMessage(data) {
     switch(data.type) {
         case 'drawing':
             if (!isDrawer) {
@@ -197,12 +127,6 @@ function handleMessage(event) {
             }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             break;
-    }
-}
-
-function sendData(data) {
-    if (dataChannel && dataChannel.readyState === 'open') {
-        dataChannel.send(JSON.stringify(data));
     }
 }
 
