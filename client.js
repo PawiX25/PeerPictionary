@@ -5,6 +5,9 @@ let isDrawer = false;
 let isDrawing = false;
 const words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
 let currentWord = null;
+let recentColors = ['#000000'];
+const maxRecentColors = 8;
+const recentColorsContainer = document.getElementById('recent-colors');
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -30,6 +33,8 @@ canvas.addEventListener('mouseout', stopDrawing);
 brushSize.addEventListener('input', () => {
     brushSizeValue.textContent = brushSize.value;
 });
+
+colorPicker.addEventListener('change', () => updateRecentColors(colorPicker.value));
 
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !isDrawer) {
@@ -174,6 +179,7 @@ function draw(e) {
     if (e.type === 'mousedown') {
         ctx.beginPath();
         ctx.moveTo(x, y);
+        updateRecentColors(colorPicker.value);
     } else {
         drawLine(ctx.lastX, ctx.lastY, x, y, colorPicker.value, brushSize.value);
         sendData({
@@ -211,3 +217,24 @@ function addChatMessage(message) {
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
 }
+
+function updateRecentColors(color) {
+    if (color === recentColors[0]) return;
+    recentColors = [color, ...recentColors.filter(c => c !== color)].slice(0, maxRecentColors);
+    displayRecentColors();
+}
+
+function displayRecentColors() {
+    recentColorsContainer.innerHTML = '';
+    recentColors.forEach(color => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = color;
+        swatch.addEventListener('click', () => {
+            colorPicker.value = color;
+        });
+        recentColorsContainer.appendChild(swatch);
+    });
+}
+
+displayRecentColors();
