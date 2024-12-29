@@ -56,7 +56,7 @@ guessInput.addEventListener('keypress', (e) => {
 });
 
 function updateStatus(message) {
-    addChatMessage(`Connection: ${message}`);
+    addChatMessage(`<i class="fas fa-info-circle text-blue-500"></i> ${message}`);
 }
 
 function generateGameCode() {
@@ -173,8 +173,11 @@ function draw(e) {
     if (!isDrawing || !isDrawer) return;
     
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY + window.scrollY;
     
     if (e.type === 'mousedown') {
         ctx.beginPath();
@@ -213,9 +216,12 @@ function stopDrawing() {
 
 function addChatMessage(message) {
     const div = document.createElement('div');
-    div.textContent = message;
+    div.innerHTML = message;
+    div.className = 'mb-2 p-2 hand-drawn bg-gray-50';
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
+    
+    div.style.animation = 'fadeIn 0.3s ease-in';
 }
 
 function updateRecentColors(color) {
@@ -228,7 +234,7 @@ function displayRecentColors() {
     recentColorsContainer.innerHTML = '';
     recentColors.forEach(color => {
         const swatch = document.createElement('div');
-        swatch.className = 'color-swatch';
+        swatch.className = 'color-swatch hand-drawn w-8 h-8 cursor-pointer hover:scale-110 transition-transform';
         swatch.style.backgroundColor = color;
         swatch.addEventListener('click', () => {
             colorPicker.value = color;
@@ -236,5 +242,14 @@ function displayRecentColors() {
         recentColorsContainer.appendChild(swatch);
     });
 }
+
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+`;
+document.head.appendChild(style);
 
 displayRecentColors();
