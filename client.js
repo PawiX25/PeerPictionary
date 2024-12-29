@@ -15,6 +15,9 @@ const createBtn = document.getElementById('createBtn');
 const joinBtn = document.getElementById('joinBtn');
 const joinInput = document.getElementById('joinInput');
 const gameCode = document.getElementById('gameCode');
+const colorPicker = document.getElementById('colorPicker');
+const brushSize = document.getElementById('brushSize');
+const brushSizeValue = document.getElementById('brushSizeValue');
 
 createBtn.onclick = createGame;
 joinBtn.onclick = joinGame;
@@ -23,6 +26,10 @@ canvas.addEventListener('mousedown', startDrawing);
 canvas.addEventListener('mousemove', draw);
 canvas.addEventListener('mouseup', stopDrawing);
 canvas.addEventListener('mouseout', stopDrawing);
+
+brushSize.addEventListener('input', () => {
+    brushSizeValue.textContent = brushSize.value;
+});
 
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !isDrawer) {
@@ -100,7 +107,7 @@ function handleMessage(data) {
     switch(data.type) {
         case 'drawing':
             if (!isDrawer) {
-                drawLine(data.x0, data.y0, data.x1, data.y1);
+                drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
             }
             break;
         case 'guess':
@@ -168,13 +175,15 @@ function draw(e) {
         ctx.beginPath();
         ctx.moveTo(x, y);
     } else {
-        drawLine(ctx.lastX, ctx.lastY, x, y);
+        drawLine(ctx.lastX, ctx.lastY, x, y, colorPicker.value, brushSize.value);
         sendData({
             type: 'drawing',
             x0: ctx.lastX,
             y0: ctx.lastY,
             x1: x,
-            y1: y
+            y1: y,
+            color: colorPicker.value,
+            size: brushSize.value
         });
     }
     
@@ -182,8 +191,11 @@ function draw(e) {
     ctx.lastY = y;
 }
 
-function drawLine(x0, y0, x1, y1) {
+function drawLine(x0, y0, x1, y1, color = '#000000', size = 2) {
     ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
     ctx.stroke();
