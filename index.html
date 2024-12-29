@@ -47,6 +47,16 @@
         input, button {
             font-family: 'Architects Daughter', cursive;
         }
+        .tooltip-text::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: black transparent transparent transparent;
+        }
     </style>
 </head>
 <body class="bg-yellow-50 min-h-screen font-drawing p-8">
@@ -78,7 +88,20 @@
                     </button>
                 </div>
             </div>
-            <div id="gameCode" class="text-center mt-4 text-xl font-bold text-purple-600"></div>
+            <div id="gameCode" class="hidden">
+                <div class="bg-purple-100 hand-drawn p-4 mt-4 max-w-xs mx-auto">
+                    <div class="flex items-center justify-center gap-3">
+                        <div class="text-lg font-bold text-purple-800">Code:</div>
+                        <div class="bg-white hand-drawn px-4 py-1 text-2xl text-purple-700"></div>
+                        <button class="hand-drawn-btn bg-purple-400 p-2 hover:bg-purple-500 relative group">
+                            <i class="fas fa-copy"></i>
+                            <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                Copy to clipboard
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="container" class="flex flex-col md:flex-row gap-8">

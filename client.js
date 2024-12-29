@@ -83,7 +83,11 @@ function createGame() {
     
     peer = new Peer(gameId);
     peer.on('open', () => {
-        gameCode.textContent = `Game Code: ${gameId}`;
+        const codeElement = gameCode.querySelector('.bg-white');
+        codeElement.textContent = gameId;
+        const copyBtn = gameCode.querySelector('button');
+        copyBtn.onclick = () => copyGameCode(gameId);
+        gameCode.classList.remove('hidden');
         updateStatus('Waiting for player to join...');
     });
     
@@ -274,3 +278,22 @@ style.textContent = `
 document.head.appendChild(style);
 
 displayRecentColors();
+
+function copyGameCode(code) {
+    navigator.clipboard.writeText(code)
+        .then(() => {
+            const copyBtn = gameCode.querySelector('button');
+            const tooltip = copyBtn.querySelector('.tooltip-text');
+            const originalIcon = copyBtn.querySelector('i').className;
+            const originalTooltip = tooltip.textContent;
+            
+            copyBtn.querySelector('i').className = 'fas fa-check text-green-500';
+            tooltip.textContent = 'Copied!';
+            
+            setTimeout(() => {
+                copyBtn.querySelector('i').className = originalIcon;
+                tooltip.textContent = originalTooltip;
+            }, 2000);
+        })
+        .catch(err => console.error('Failed to copy:', err));
+}
