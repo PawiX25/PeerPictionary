@@ -10,6 +10,8 @@ const maxRecentColors = 8;
 const recentColorsContainer = document.getElementById('recent-colors');
 let username = '';
 
+let isFillMode = false;
+
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const guessInput = document.getElementById('guess-input');
@@ -26,6 +28,9 @@ const usernameInput = document.getElementById('usernameInput');
 const usernameBtn = document.getElementById('usernameBtn');
 const usernamePanel = document.getElementById('username-panel');
 const connectionPanel = document.getElementById('connection-panel');
+
+const fillBtn = document.getElementById('fillBtn');
+const clearBtn = document.getElementById('clearBtn');
 
 createBtn.onclick = createGame;
 joinBtn.onclick = joinGame;
@@ -67,6 +72,9 @@ usernameBtn.onclick = () => {
         connectionPanel.classList.remove('hidden');
     }
 };
+
+fillBtn.onclick = toggleFillMode;
+clearBtn.onclick = clearCanvas;
 
 function updateStatus(message) {
     addChatMessage(`<i class="fas fa-info-circle text-blue-500"></i> ${message}`);
@@ -164,6 +172,26 @@ function handleMessage(data) {
             }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             break;
+        case 'fill':
+            if (!isDrawer) {
+                floodFill(data.x, data.y, data.color);
+            }
+            break;
+        case 'canvas_state':
+            if (!isDrawer) {
+                const img = new Image();
+                img.src = data.state;
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+            }
+            break;
+        case 'clear_canvas':
+            if (!isDrawer) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            break;
     }
 }
 
@@ -190,6 +218,24 @@ function getRandomWord() {
 
 function startDrawing(e) {
     if (!isDrawer) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
+    
+    if (isFillMode) {
+        floodFill(x, y, colorPicker.value);
+        sendData({
+            type: 'fill',
+            x: x,
+            y: y,
+            color: colorPicker.value
+        });
+        return;
+    }
+    
     isDrawing = true;
     draw(e);
 }
@@ -296,4 +342,54 @@ function copyGameCode(code) {
             }, 2000);
         })
         .catch(err => console.error('Failed to copy:', err));
+}
+
+function clearCanvas() {
+    if (!isDrawer) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    sendData({ type: 'clear_canvas' });
+}
+
+function floodFill(startX, startY, fillColor) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    
+    const startPos = (startY * canvas.width + startX) * 4;
+    const startR = pixels[startPos];
+    const startG = pixels[startPos + 1];
+    const startB = pixels[startPos + 2];
+    const startA = pixels[startPos + 3];
+    
+    if (colorMatch(fillColor, [startR, startG, startB, startA])) return;
+    
+    const fillR = parseInt(fillColor.substr(1,2), 16);
+    const fillG = parseInt(fillColor.substr(3,2), 16);
+    const fillB = parseInt(fillColor.substr(5,2), 16);
+    
+    const stack = [[startX, startY]];
+    
+    while (stack.length) {
+        const [x, y] = stack.pop();
+        const pos = (y * canvas.width + x) * 4;
+        
+        if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
+        if (!colorMatch([pixels[pos], pixels[pos + 1], pixels[pos + 2], pixels[pos + 3]], 
+                       [startR, startG, startB, startA])) continue;
+        
+        pixels[pos] = fillR;
+        pixels[pos + 1] = fillG;
+        pixels[pos + 2] = fillB;
+        pixels[pos + 3] = 255;
+        
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+}
+
+function colorMatch(c1, c2) {
+    return Math.abs(c1[0] - c2[0]) < 5 && 
+           Math.abs(c1[1] - c2[1]) < 5 && 
+           Math.abs(c1[2] - c2[2]) < 5 && 
+           Math.abs(c1[3] - c2[3]) < 5;
 }

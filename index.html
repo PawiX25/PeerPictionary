@@ -30,7 +30,7 @@
             transform: scale(1.05) rotate(-1deg);
         }
         #canvas {
-            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            border-radius: 255px 15px 225px 15px/15px 15px 225px 15px 255px;
         }
         .wiggle {
             animation: wiggle 1s ease-in-out infinite;
@@ -118,6 +118,14 @@
                             <input type="range" id="brushSize" min="1" max="20" value="2" 
                                    class="w-32">
                             <span id="brushSizeValue" class="font-bold">2</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="fillBtn" class="hand-drawn-btn bg-green-400 p-2 hover:bg-green-500" title="Fill">
+                                <i class="fas fa-fill-drip"></i>
+                            </button>
+                            <button id="clearBtn" class="hand-drawn-btn bg-red-400 p-2 hover:bg-red-500" title="Clear Canvas">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                         <div id="recent-colors" class="flex gap-2"></div>
                     </div>
