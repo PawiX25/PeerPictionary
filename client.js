@@ -32,6 +32,15 @@ const connectionPanel = document.getElementById('connection-panel');
 const fillBtn = document.getElementById('fillBtn');
 const clearBtn = document.getElementById('clearBtn');
 
+let undoStack = [];
+let redoStack = [];
+
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+
+undoBtn.onclick = undo;
+redoBtn.onclick = redo;
+
 createBtn.onclick = createGame;
 joinBtn.onclick = joinGame;
 
@@ -236,6 +245,11 @@ function startDrawing(e) {
         return;
     }
     
+    if (!isFillMode) {
+        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        redoStack = [];
+    }
+    
     isDrawing = true;
     draw(e);
 }
@@ -392,4 +406,22 @@ function colorMatch(c1, c2) {
            Math.abs(c1[1] - c2[1]) < 5 && 
            Math.abs(c1[2] - c2[2]) < 5 && 
            Math.abs(c1[3] - c2[3]) < 5;
+}
+
+function undo() {
+    if (undoStack.length > 0) {
+        redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        const previousState = undoStack.pop();
+        ctx.putImageData(previousState, 0, 0);
+        sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+    }
+}
+
+function redo() {
+    if (redoStack.length > 0) {
+        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        const nextState = redoStack.pop();
+        ctx.putImageData(nextState, 0, 0);
+        sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+    }
 }
