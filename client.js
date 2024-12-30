@@ -425,3 +425,10 @@ function redo() {
         sendData({ type: 'canvas_state', state: canvas.toDataURL() });
     }
 }
+
+function toggleFillMode() {
+    isFillMode = !isFillMode;
+    fillBtn.classList.toggle('bg-green-400');
+    fillBtn.classList.toggle('bg-yellow-400');
+    canvas.style.cursor = isFillMode ? 'crosshair' : 'default';
+}
