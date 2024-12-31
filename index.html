@@ -104,6 +104,43 @@
             </div>
         </div>
 
+        <div id="lobby-panel" class="bg-white p-6 hand-drawn mb-8 hidden">
+            <div class="flex flex-col md:flex-row gap-8">
+                <div class="flex-1">
+                    <h2 class="text-2xl font-bold mb-4"><i class="fas fa-users text-blue-600"></i> Players</h2>
+                    <div id="player-list" class="space-y-2"></div>
+                </div>
+                <div class="flex-1">
+                    <h2 class="text-2xl font-bold mb-4"><i class="fas fa-cog text-gray-600"></i> Game Settings</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            <label for="rounds" class="font-bold">Rounds:</label>
+                            <input type="number" id="rounds" min="1" max="10" value="3" 
+                                   class="hand-drawn px-3 py-1 w-20">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="drawTime" class="font-bold">Draw Time (seconds):</label>
+                            <input type="number" id="drawTime" min="30" max="180" value="60" step="30"
+                                   class="hand-drawn px-3 py-1 w-20">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="customWords" class="font-bold">Custom Words:</label>
+                            <input type="text" id="customWords" placeholder="comma,separated,words"
+                                   class="hand-drawn px-3 py-1 flex-1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-center gap-4 mt-6">
+                <button id="readyBtn" class="hand-drawn-btn bg-yellow-400 px-6 py-3 font-bold hover:bg-yellow-500">
+                    <i class="fas fa-check mr-2"></i>Ready
+                </button>
+                <button id="startBtn" class="hand-drawn-btn bg-green-400 px-6 py-3 font-bold hover:bg-green-500 hidden">
+                    <i class="fas fa-play mr-2"></i>Start Game
+                </button>
+            </div>
+        </div>
+
         <div id="container" class="flex flex-col md:flex-row gap-8">
             <div class="flex-1">
                 <canvas id="canvas" width="800" height="400" class="bg-white w-full"></canvas>

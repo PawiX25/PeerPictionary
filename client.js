@@ -3,7 +3,7 @@ let conn = null;
 let isHost = false;
 let isDrawer = false;
 let isDrawing = false;
-const words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
+let words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
 let currentWord = null;
 let recentColors = ['#000000'];
 const maxRecentColors = 8;
@@ -111,8 +111,7 @@ function createGame() {
     peer.on('connection', (connection) => {
         conn = connection;
         setupConnection();
-        currentWord = getRandomWord();
-        wordDisplay.textContent = `Draw: ${currentWord}`;
+        initializeLobby();
     });
 }
 
@@ -131,12 +130,22 @@ function setupConnection() {
     conn.on('open', () => {
         sendData({
             type: 'user_info',
-            username: username
+            username: username,
+            isHost: isHost
         });
         updateStatus('Connected!');
+        initializeLobby();
     });
     
     conn.on('data', handleMessage);
+    
+    conn.on('close', () => {
+        if (players.has(username)) {
+            players.delete(username);
+            updatePlayerList();
+            updateStatus('Disconnected from game');
+        }
+    });
 }
 
 function sendData(data) {
@@ -153,7 +162,16 @@ function handleMessage(data) {
             }
             break;
         case 'user_info':
+            players.set(data.username, { ready: false, score: 0 });
             addChatMessage(`${data.username} joined the game!`);
+            updatePlayerList();
+            
+            if (isHost) {
+                sendData({
+                    type: 'player_sync',
+                    players: Array.from(players.entries())
+                });
+            }
             break;
         case 'guess':
             if (isHost && data.guess.toLowerCase() === currentWord.toLowerCase()) {
@@ -199,6 +217,38 @@ function handleMessage(data) {
         case 'clear_canvas':
             if (!isDrawer) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            break;
+        case 'player_ready':
+            const player = players.get(data.username);
+            if (player) {
+                player.ready = data.ready;
+                updatePlayerList();
+            }
+            break;
+        case 'game_settings':
+            if (!isHost) {
+                gameSettings = data.settings;
+                document.getElementById('rounds').value = gameSettings.rounds;
+                document.getElementById('drawTime').value = gameSettings.drawTime;
+                document.getElementById('customWords').value = gameSettings.customWords.join(',');
+                words = gameSettings.customWords.length > 0 ? 
+                    gameSettings.customWords : 
+                    ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
+            }
+            break;
+        case 'start_game':
+            startGame(false);
+            break;
+        case 'player_sync':
+            players = new Map(data.players);
+            updatePlayerList();
+            break;
+        case 'player_disconnect':
+            if (players.has(data.username)) {
+                players.delete(data.username);
+                addChatMessage(`${data.username} left the game`);
+                updatePlayerList();
             }
             break;
     }
@@ -431,4 +481,116 @@ function toggleFillMode() {
     fillBtn.classList.toggle('bg-green-400');
     fillBtn.classList.toggle('bg-yellow-400');
     canvas.style.cursor = isFillMode ? 'crosshair' : 'default';
+}
+
+let players = new Map();
+let gameSettings = {
+    rounds: 3,
+    drawTime: 60,
+    customWords: []
+};
+
+function initializeLobby() {
+    const lobbyPanel = document.getElementById('lobby-panel');
+    const readyBtn = document.getElementById('readyBtn');
+    const startBtn = document.getElementById('startBtn');
+    const playerList = document.getElementById('player-list');
+    
+    lobbyPanel.classList.remove('hidden');
+    
+    if (isHost) {
+        document.getElementById('rounds').onchange = updateGameSettings;
+        document.getElementById('drawTime').onchange = updateGameSettings;
+        document.getElementById('customWords').onchange = updateGameSettings;
+        startBtn.classList.remove('hidden');
+        startBtn.onclick = startGame;
+    }
+    
+    readyBtn.onclick = toggleReady;
+    
+    players.set(username, { ready: false, score: 0 });
+    updatePlayerList();
+}
+
+function updateGameSettings() {
+    if (!isHost) return;
+    
+    const customWords = document.getElementById('customWords').value
+        .split(',')
+        .map(w => w.trim())
+        .filter(w => w.length > 0);
+        
+    gameSettings = {
+        rounds: parseInt(document.getElementById('rounds').value),
+        drawTime: parseInt(document.getElementById('drawTime').value),
+        customWords: customWords
+    };
+    
+    if (customWords.length > 0) {
+        words = customWords;
+    } else {
+        words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
+    }
+    
+    sendData({
+        type: 'game_settings',
+        settings: gameSettings
+    });
+}
+
+function toggleReady() {
+    const player = players.get(username);
+    player.ready = !player.ready;
+    
+    const readyBtn = document.getElementById('readyBtn');
+    readyBtn.classList.toggle('bg-yellow-400');
+    readyBtn.classList.toggle('bg-green-400');
+    readyBtn.innerHTML = player.ready ? 
+        '<i class="fas fa-check mr-2"></i>Ready!' :
+        '<i class="fas fa-check mr-2"></i>Ready';
+    
+    sendData({
+        type: 'player_ready',
+        username: username,
+        ready: player.ready
+    });
+    
+    updatePlayerList();
+}
+
+function updatePlayerList() {
+    const playerList = document.getElementById('player-list');
+    playerList.innerHTML = '';
+    
+    players.forEach((data, playerName) => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'flex items-center justify-between p-2 hand-drawn bg-gray-50';
+        playerDiv.innerHTML = `
+            <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}</span>
+            <span class="flex items-center">
+                <i class="fas fa-${data.ready ? 'check text-green-600' : 'clock text-yellow-600'}"></i>
+            </span>
+        `;
+        playerList.appendChild(playerDiv);
+    });
+    
+    if (isHost) {
+        const allReady = Array.from(players.values()).every(p => p.ready);
+        const startBtn = document.getElementById('startBtn');
+        startBtn.disabled = !allReady;
+        startBtn.classList.toggle('opacity-50', !allReady);
+    }
+}
+
+function startGame(isInitiator = true) {
+    if (isInitiator && isHost) {
+        sendData({ type: 'start_game' });
+    }
+    
+    document.getElementById('lobby-panel').classList.add('hidden');
+    document.getElementById('container').classList.remove('hidden');
+    
+    if (isHost) {
+        nextRound();
+    }
 }
