@@ -98,7 +98,21 @@ function createGame() {
     isDrawer = true;
     const gameId = generateGameCode();
     
-    peer = new Peer(gameId);
+    peer = new Peer(gameId, {
+        config: {
+            'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { 
+                    urls: 'turn:numb.viagenie.ca',
+                    username: 'webrtc@live.com',
+                    credential: 'muazkh'
+                }
+            ]
+        },
+        debug: 3
+    });
+
     peer.on('open', () => {
         const codeElement = gameCode.querySelector('.bg-white');
         codeElement.textContent = gameId;
@@ -119,7 +133,21 @@ function joinGame() {
     const gameId = joinInput.value;
     if (!gameId) return;
     
-    peer = new Peer();
+    peer = new Peer({
+        config: {
+            'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { 
+                    urls: 'turn:numb.viagenie.ca',
+                    username: 'webrtc@live.com',
+                    credential: 'muazkh'
+                }
+            ]
+        },
+        debug: 3
+    });
+
     peer.on('open', () => {
         conn = peer.connect(gameId);
         setupConnection();
