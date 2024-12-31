@@ -101,13 +101,29 @@ function createGame() {
     peer = new Peer(gameId, {
         config: {
             'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { 
-                    urls: 'turn:numb.viagenie.ca',
-                    username: 'webrtc@live.com',
-                    credential: 'muazkh'
-                }
+                {
+                    urls: "stun:stun.relay.metered.ca:80",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:443",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
             ]
         },
         debug: 3
@@ -136,13 +152,29 @@ function joinGame() {
     peer = new Peer({
         config: {
             'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { 
-                    urls: 'turn:numb.viagenie.ca',
-                    username: 'webrtc@live.com',
-                    credential: 'muazkh'
-                }
+                {
+                    urls: "stun:stun.relay.metered.ca:80",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:443",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
+                {
+                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                    username: "aa4c11e375ec6112aaec44e8",
+                    credential: "L6YD9q3C07uyeaBB",
+                },
             ]
         },
         debug: 3
