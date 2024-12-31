@@ -5,7 +5,6 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
 ## Features
 
 - **Peer-to-peer multiplayer** - No central server needed!
-  - Note: Currently only works between players on the same network
 - **Easy room creation** - Generate a 4-digit code and share with friends
 - **Drawing tools** 
   - Brush size control
@@ -40,6 +39,9 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
 1. Clone the repository
 2. Open `index.html` in your browser
 3. Share the game with friends!
+
+> **Note:** This game uses a trial TURN server with a 500MB monthly limit (renews Jan-31-2025).
+> If the limit is exceeded, peer-to-peer connectivity may be affected.
 
 ## Contributing 
 
