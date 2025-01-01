@@ -57,31 +57,58 @@ brushSize.addEventListener('input', () => {
 
 colorPicker.addEventListener('change', () => updateRecentColors(colorPicker.value));
 
+function containsWord(message, word) {
+    if (!word) return false;
+    const messageWords = message.toLowerCase().split(/\W+/);
+    const targetWord = word.toLowerCase();
+    return messageWords.includes(targetWord);
+}
+
 guessInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !isDrawer) {
-        const guess = guessInput.value;
-        if (isHost) {
-            if (guess.toLowerCase() === currentWord.toLowerCase()) {
-                const guesser = players.get(username);
-                if (guesser) {
-                    guesser.score += POINTS.FIRST_GUESS;
-                    updateScoreDisplay();
-                }
-                addChatMessage(`Correct! ${username} guessed the word: ${currentWord}`);
+    if (e.key === 'Enter') {
+        const guess = guessInput.value.trim();
+        if (!guess) return;
+
+        if (isDrawer) {
+            if (containsWord(guess, currentWord)) {
+                addChatMessage('<span class="text-red-600"><i class="fas fa-exclamation-circle"></i> You cannot reveal the word!</span>');
+            } else {
                 sendData({
-                    type: 'correct_guess',
-                    word: currentWord,
+                    type: 'chat_message',
                     username: username,
-                    scores: Array.from(players.entries())
+                    message: guess
                 });
-                setTimeout(nextRound, 3000);
             }
         } else {
-            sendData({
-                type: 'guess',
-                guess: guess,
-                username: username
-            });
+            if (isHost) {
+                if (guess.toLowerCase() === currentWord.toLowerCase()) {
+                    const guesser = players.get(username);
+                    if (guesser) {
+                        guesser.score += POINTS.FIRST_GUESS;
+                        updateScoreDisplay();
+                    }
+                    sendData({
+                        type: 'correct_guess',
+                        word: currentWord,
+                        username: username,
+                        scores: Array.from(players.entries())
+                    });
+                    setTimeout(nextRound, 3000);
+                } else {
+                    addChatMessage(`${username}: ${guess}`);
+                    sendData({
+                        type: 'chat_message',
+                        username: username,
+                        message: guess
+                    });
+                }
+            } else {
+                sendData({
+                    type: 'guess',
+                    guess: guess,
+                    username: username
+                });
+            }
         }
         guessInput.value = '';
     }
@@ -282,36 +309,51 @@ function handleMessage(data) {
             }
             break;
         case 'guess':
-            if (isHost && data.guess.toLowerCase() === currentWord.toLowerCase()) {
-                const guesser = players.get(data.username);
-                const timePassed = (Date.now() - roundStartTime) / 1000;
-                
-                if (guesser) {
-                    if (!hasAnyoneGuessed) {
-                        guesser.score += POINTS.FIRST_GUESS;
-                        hasAnyoneGuessed = true;
-                    } else if (timePassed < 10) {
-                        guesser.score += POINTS.QUICK_GUESS;
-                    } else {
-                        guesser.score += POINTS.NORMAL_GUESS;
+            if (isHost) {
+                if (data.guess.toLowerCase() === currentWord.toLowerCase()) {
+                    const guesser = players.get(data.username);
+                    const timePassed = (Date.now() - roundStartTime) / 1000;
+                    
+                    if (guesser) {
+                        if (!hasAnyoneGuessed) {
+                            guesser.score += POINTS.FIRST_GUESS;
+                            hasAnyoneGuessed = true;
+                        } else if (timePassed < 10) {
+                            guesser.score += POINTS.QUICK_GUESS;
+                        } else {
+                            guesser.score += POINTS.NORMAL_GUESS;
+                        }
                     }
+                    
+                    sendData({
+                        type: 'correct_guess',
+                        word: currentWord,
+                        username: data.username,
+                        scores: Array.from(players.entries())
+                    });
+                    setTimeout(nextRound, 3000);
+                } else {
+                    addChatMessage(`${data.username}: ${data.guess}`);
+                    sendData({
+                        type: 'chat_message',
+                        username: data.username,
+                        message: data.guess
+                    });
                 }
-                
-                sendData({
-                    type: 'correct_guess',
-                    word: currentWord,
-                    username: data.username,
-                    scores: Array.from(players.entries())
-                });
-                setTimeout(nextRound, 3000);
             }
-            addChatMessage(`${data.username}: ${data.guess}`);
+            break;
+        
+        case 'chat_message':
+            addChatMessage(`${data.username}: ${data.message}`);
+            if (isHost) {
+                sendData(data);
+            }
             break;
         
         case 'correct_guess':
             players = new Map(data.scores);
             updateScoreDisplay();
-            addChatMessage(`Correct! ${data.username} guessed the word: ${data.word}`);
+            addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${data.username} guessed the word!</span>`);
             break;
         case 'new_round':
             currentDrawer = data.drawer;
