@@ -577,23 +577,80 @@ canvas.addEventListener('touchend', stopDrawing);
 
 function handleTouchStart(e) {
     e.preventDefault();
+    if (!isDrawer) return;
+    
     const touch = e.touches[0];
-    const mouseEvent = new MouseEvent('mousedown', {
-        pageX: touch.pageX,
-        pageY: touch.pageY
-    });
-    startDrawing(mouseEvent);
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    if (isFillMode) {
+        floodFill(Math.floor(x), Math.floor(y), colorPicker.value);
+        sendData({
+            type: 'fill',
+            x: Math.floor(x),
+            y: Math.floor(y),
+            color: colorPicker.value
+        });
+        return;
+    }
+    
+    isDrawing = true;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lastX = x;
+    ctx.lastY = y;
+    
+    if (!isFillMode) {
+        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        redoStack = [];
+    }
 }
 
 function handleTouchMove(e) {
     e.preventDefault();
+    if (!isDrawing || !isDrawer) return;
+    
     const touch = e.touches[0];
-    const mouseEvent = new MouseEvent('mousemove', {
-        pageX: touch.pageX,
-        pageY: touch.pageY
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    const currentColor = isEraserMode ? '#FFFFFF' : colorPicker.value;
+    const currentSize = isEraserMode ? parseInt(brushSize.value) * 2 : brushSize.value;
+    
+    drawLine(ctx.lastX, ctx.lastY, x, y, currentColor, currentSize);
+    sendData({
+        type: 'drawing',
+        x0: ctx.lastX,
+        y0: ctx.lastY,
+        x1: x,
+        y1: y,
+        color: currentColor,
+        size: currentSize
     });
-    draw(mouseEvent);
+    
+    ctx.lastX = x;
+    ctx.lastY = y;
 }
+
+function setupCanvas() {
+    const container = canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    const scale = containerWidth / canvas.width;
+    canvas.style.width = containerWidth + 'px';
+    canvas.style.height = (canvas.height * scale) + 'px';
+    
+    canvas.style.touchAction = 'none';
+}
+
+window.addEventListener('load', setupCanvas);
 
 let resizeTimeout;
 window.addEventListener('resize', () => {
@@ -604,11 +661,7 @@ window.addEventListener('resize', () => {
         tempCanvas.height = canvas.height;
         tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
         
-        const container = canvas.parentElement;
-        const containerWidth = container.clientWidth;
-        const scale = containerWidth / canvas.width;
-        canvas.style.width = containerWidth + 'px';
-        canvas.style.height = (canvas.height * scale) + 'px';
+        setupCanvas();
         
         ctx.drawImage(tempCanvas, 0, 0);
         
