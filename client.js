@@ -11,6 +11,7 @@ const recentColorsContainer = document.getElementById('recent-colors');
 let username = '';
 
 let isFillMode = false;
+let isEraserMode = false;
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -31,6 +32,7 @@ const connectionPanel = document.getElementById('connection-panel');
 
 const fillBtn = document.getElementById('fillBtn');
 const clearBtn = document.getElementById('clearBtn');
+const eraserBtn = document.getElementById('eraserBtn');
 
 let undoStack = [];
 let redoStack = [];
@@ -95,6 +97,7 @@ usernameBtn.onclick = () => {
 
 fillBtn.onclick = toggleFillMode;
 clearBtn.onclick = clearCanvas;
+eraserBtn.onclick = toggleEraserMode;
 
 function updateStatus(message) {
     addChatMessage(`<i class="fas fa-info-circle text-blue-500"></i> ${message}`);
@@ -508,15 +511,18 @@ function draw(e) {
     
     const point = getCanvasPoint(e);
     
-    drawLine(ctx.lastX, ctx.lastY, point.x, point.y, colorPicker.value, brushSize.value);
+    const currentColor = isEraserMode ? '#FFFFFF' : colorPicker.value;
+    const currentSize = isEraserMode ? parseInt(brushSize.value) * 2 : brushSize.value;
+    
+    drawLine(ctx.lastX, ctx.lastY, point.x, point.y, currentColor, currentSize);
     sendData({
         type: 'drawing',
         x0: ctx.lastX,
         y0: ctx.lastY,
         x1: point.x,
         y1: point.y,
-        color: colorPicker.value,
-        size: brushSize.value
+        color: currentColor,
+        size: currentSize
     });
     
     ctx.lastX = point.x;
@@ -716,9 +722,18 @@ function redo() {
 
 function toggleFillMode() {
     isFillMode = !isFillMode;
+    if (isEraserMode) toggleEraserMode();
     fillBtn.classList.toggle('bg-green-400');
     fillBtn.classList.toggle('bg-yellow-400');
     canvas.style.cursor = isFillMode ? 'crosshair' : 'default';
+}
+
+function toggleEraserMode() {
+    if (isFillMode) toggleFillMode();
+    isEraserMode = !isEraserMode;
+    eraserBtn.classList.toggle('bg-gray-400');
+    eraserBtn.classList.toggle('bg-yellow-400');
+    canvas.style.cursor = isEraserMode ? 'crosshair' : 'default';
 }
 
 let players = new Map();
