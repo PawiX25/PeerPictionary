@@ -464,21 +464,28 @@ function getRandomWord() {
     return words[Math.floor(Math.random() * words.length)];
 }
 
-function startDrawing(e) {
-    if (!isDrawer) return;
-    
+function getCanvasPoint(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const x = Math.floor((e.clientX - rect.left) * scaleX);
-    const y = Math.floor((e.clientY - rect.top) * scaleY);
+    
+    const x = (e.pageX - (rect.left + window.pageXOffset)) * scaleX;
+    const y = (e.pageY - (rect.top + window.pageYOffset)) * scaleY;
+    
+    return { x, y };
+}
+
+function startDrawing(e) {
+    if (!isDrawer) return;
+    
+    const point = getCanvasPoint(e);
     
     if (isFillMode) {
-        floodFill(x, y, colorPicker.value);
+        floodFill(Math.floor(point.x), Math.floor(point.y), colorPicker.value);
         sendData({
             type: 'fill',
-            x: x,
-            y: y,
+            x: Math.floor(point.x),
+            y: Math.floor(point.y),
             color: colorPicker.value
         });
         return;
@@ -490,39 +497,81 @@ function startDrawing(e) {
     }
     
     isDrawing = true;
-    draw(e);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lastX = point.x;
+    ctx.lastY = point.y;
 }
 
 function draw(e) {
     if (!isDrawing || !isDrawer) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const point = getCanvasPoint(e);
     
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY + window.scrollY;
+    drawLine(ctx.lastX, ctx.lastY, point.x, point.y, colorPicker.value, brushSize.value);
+    sendData({
+        type: 'drawing',
+        x0: ctx.lastX,
+        y0: ctx.lastY,
+        x1: point.x,
+        y1: point.y,
+        color: colorPicker.value,
+        size: brushSize.value
+    });
     
-    if (e.type === 'mousedown') {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        updateRecentColors(colorPicker.value);
-    } else {
-        drawLine(ctx.lastX, ctx.lastY, x, y, colorPicker.value, brushSize.value);
-        sendData({
-            type: 'drawing',
-            x0: ctx.lastX,
-            y0: ctx.lastY,
-            x1: x,
-            y1: y,
-            color: colorPicker.value,
-            size: brushSize.value
-        });
-    }
-    
-    ctx.lastX = x;
-    ctx.lastY = y;
+    ctx.lastX = point.x;
+    ctx.lastY = point.y;
 }
+
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+canvas.addEventListener('touchend', stopDrawing);
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousedown', {
+        pageX: touch.pageX,
+        pageY: touch.pageY
+    });
+    startDrawing(mouseEvent);
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousemove', {
+        pageX: touch.pageX,
+        pageY: touch.pageY
+    });
+    draw(mouseEvent);
+}
+
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        
+        const container = canvas.parentElement;
+        const containerWidth = container.clientWidth;
+        const scale = containerWidth / canvas.width;
+        canvas.style.width = containerWidth + 'px';
+        canvas.style.height = (canvas.height * scale) + 'px';
+        
+        ctx.drawImage(tempCanvas, 0, 0);
+        
+        if (isDrawer) {
+            sendData({
+                type: 'canvas_state',
+                state: canvas.toDataURL()
+            });
+        }
+    }, 250);
+});
 
 function drawLine(x0, y0, x1, y1, color = '#000000', size = 2) {
     ctx.beginPath();
