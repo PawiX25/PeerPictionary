@@ -60,7 +60,18 @@ guessInput.addEventListener('keypress', (e) => {
         const guess = guessInput.value;
         if (isHost) {
             if (guess.toLowerCase() === currentWord.toLowerCase()) {
+                const guesser = players.get(username);
+                if (guesser) {
+                    guesser.score += POINTS.FIRST_GUESS;
+                    updateScoreDisplay();
+                }
                 addChatMessage(`Correct! ${username} guessed the word: ${currentWord}`);
+                sendData({
+                    type: 'correct_guess',
+                    word: currentWord,
+                    username: username,
+                    scores: Array.from(players.entries())
+                });
                 setTimeout(nextRound, 3000);
             }
         } else {
