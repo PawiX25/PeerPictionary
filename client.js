@@ -325,6 +325,8 @@ function handleMessage(data) {
                         }
                     }
                     
+                    addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${data.username} guessed the word!</span>`);
+                    
                     sendData({
                         type: 'correct_guess',
                         word: currentWord,
