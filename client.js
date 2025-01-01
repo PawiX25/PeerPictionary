@@ -93,9 +93,12 @@ function generateGameCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
+let connections = new Map();
+let hasAnyoneGuessed = false;
+let roundStartTime = Date.now();
+
 function createGame() {
     isHost = true;
-    isDrawer = true;
     const gameId = generateGameCode();
     
     peer = new Peer(gameId, {
@@ -139,9 +142,20 @@ function createGame() {
     });
     
     peer.on('connection', (connection) => {
-        conn = connection;
-        setupConnection();
-        initializeLobby();
+        const connId = connection.peer;
+        connections.set(connId, connection);
+        setupConnection(connection);
+        
+        connection.on('open', () => {
+            connection.send({
+                type: 'game_state',
+                players: Array.from(players.entries()),
+                settings: gameSettings,
+                currentDrawer: currentDrawer,
+                currentWord: currentWord,
+                roundNumber: roundNumber
+            });
+        });
     });
 }
 
@@ -182,12 +196,22 @@ function joinGame() {
 
     peer.on('open', () => {
         conn = peer.connect(gameId);
-        setupConnection();
+        setupConnection(conn);
     });
 }
 
-function setupConnection() {
-    conn.on('open', () => {
+function sendData(data) {
+    if (isHost) {
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
+    } else if (conn && conn.open) {
+        conn.send(data);
+    }
+}
+
+function setupConnection(connection) {
+    connection.on('open', () => {
         sendData({
             type: 'user_info',
             username: username,
@@ -195,11 +219,24 @@ function setupConnection() {
         });
         updateStatus('Connected!');
         initializeLobby();
+        
+        if (!isHost) {
+            sendData({
+                type: 'request_sync'
+            });
+        }
+        
+        if (isHost && isDrawer) {
+            connection.send({
+                type: 'canvas_state',
+                state: canvas.toDataURL()
+            });
+        }
     });
     
-    conn.on('data', handleMessage);
+    connection.on('data', handleMessage);
     
-    conn.on('close', () => {
+    connection.on('close', () => {
         if (players.has(username)) {
             players.delete(username);
             updatePlayerList();
@@ -208,17 +245,14 @@ function setupConnection() {
     });
 }
 
-function sendData(data) {
-    if (conn && conn.open) {
-        conn.send(data);
-    }
-}
-
 function handleMessage(data) {
     switch(data.type) {
         case 'drawing':
             if (!isDrawer) {
                 drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
+                if (isHost) {
+                    sendData(data);
+                }
             }
             break;
         case 'user_info':
@@ -235,33 +269,56 @@ function handleMessage(data) {
             break;
         case 'guess':
             if (isHost && data.guess.toLowerCase() === currentWord.toLowerCase()) {
+                const guesser = players.get(data.username);
+                const timePassed = (Date.now() - roundStartTime) / 1000;
+                
+                if (guesser) {
+                    if (!hasAnyoneGuessed) {
+                        guesser.score += POINTS.FIRST_GUESS;
+                        hasAnyoneGuessed = true;
+                    } else if (timePassed < 10) {
+                        guesser.score += POINTS.QUICK_GUESS;
+                    } else {
+                        guesser.score += POINTS.NORMAL_GUESS;
+                    }
+                }
+                
                 sendData({
                     type: 'correct_guess',
                     word: currentWord,
-                    username: data.username
+                    username: data.username,
+                    scores: Array.from(players.entries())
                 });
                 setTimeout(nextRound, 3000);
             }
             addChatMessage(`${data.username}: ${data.guess}`);
             break;
+        
         case 'correct_guess':
-            addChatMessage(`Correct! The word was: ${data.word}`);
+            players = new Map(data.scores);
+            updateScoreDisplay();
+            addChatMessage(`Correct! ${data.username} guessed the word: ${data.word}`);
             break;
         case 'new_round':
-            if (!isHost) {
-                isDrawer = !isDrawer;
-                if (isDrawer) {
-                    currentWord = data.word;
-                    wordDisplay.textContent = `Draw: ${currentWord}`;
-                } else {
-                    wordDisplay.textContent = 'Guess the word!';
-                }
+            currentDrawer = data.drawer;
+            isDrawer = currentDrawer === username;
+            if (isDrawer) {
+                currentWord = data.word;
+                wordDisplay.textContent = `Draw: ${currentWord}`;
+            } else {
+                wordDisplay.textContent = 'Guess the word!';
             }
+            roundNumber = data.roundNumber;
+            hasAnyoneGuessed = false;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateScoreDisplay();
             break;
         case 'fill':
             if (!isDrawer) {
                 floodFill(data.x, data.y, data.color);
+                if (isHost) {
+                    sendData(data);
+                }
             }
             break;
         case 'canvas_state':
@@ -271,18 +328,30 @@ function handleMessage(data) {
                 img.onload = () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0);
+                    if (isHost) {
+                        sendData(data);
+                    }
                 };
             }
             break;
         case 'clear_canvas':
             if (!isDrawer) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (isHost) {
+                    sendData(data);
+                }
             }
             break;
         case 'player_ready':
-            const player = players.get(data.username);
-            if (player) {
-                player.ready = data.ready;
+            const readyPlayer = players.get(data.username);
+            if (readyPlayer) {
+                readyPlayer.ready = data.ready;
+                if (isHost) {
+                    sendData({
+                        type: 'player_sync',
+                        players: Array.from(players.entries())
+                    });
+                }
                 updatePlayerList();
             }
             break;
@@ -301,8 +370,19 @@ function handleMessage(data) {
             startGame(false);
             break;
         case 'player_sync':
+            const oldPlayers = new Map(players);
             players = new Map(data.players);
+            
+            if (!isHost) {
+                const localPlayer = oldPlayers.get(username);
+                const syncedPlayer = players.get(username);
+                if (localPlayer && syncedPlayer) {
+                    syncedPlayer.ready = localPlayer.ready;
+                }
+            }
+            
             updatePlayerList();
+            updateScoreDisplay();
             break;
         case 'player_disconnect':
             if (players.has(data.username)) {
@@ -311,22 +391,60 @@ function handleMessage(data) {
                 updatePlayerList();
             }
             break;
+        case 'game_state':
+            if (!isHost) {
+                players = new Map(data.players);
+                gameSettings = data.settings;
+                currentDrawer = data.currentDrawer;
+                currentWord = data.currentWord;
+                roundNumber = data.roundNumber;
+                updatePlayerList();
+                updateScoreDisplay();
+            }
+            break;
+        case 'request_sync':
+            if (isHost) {
+                sendData({
+                    type: 'player_sync',
+                    players: Array.from(players.entries())
+                });
+            }
+            break;
     }
 }
 
 function nextRound() {
     if (isHost) {
-        isDrawer = !isDrawer;
+        const playerArray = Array.from(players.keys());
+        const currentIndex = playerArray.indexOf(currentDrawer);
+        const nextIndex = (currentIndex + 1) % playerArray.length;
+        currentDrawer = playerArray[nextIndex];
+        
+        roundNumber++;
         currentWord = getRandomWord();
+        hasAnyoneGuessed = false;
+        roundStartTime = Date.now();
+        
+        if (roundNumber > gameSettings.rounds * playerArray.length) {
+            endGame();
+            return;
+        }
+        
         sendData({
             type: 'new_round',
-            word: currentWord
+            word: currentWord,
+            drawer: currentDrawer,
+            roundNumber: roundNumber
         });
+        
+        isDrawer = currentDrawer === username;
         if (isDrawer) {
             wordDisplay.textContent = `Draw: ${currentWord}`;
         } else {
             wordDisplay.textContent = 'Guess the word!';
         }
+        
+        updateScoreDisplay();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 }
@@ -550,6 +668,14 @@ let gameSettings = {
     customWords: []
 };
 
+let currentDrawer = null;
+let roundNumber = 1;
+const POINTS = {
+    FIRST_GUESS: 100,
+    QUICK_GUESS: 50,
+    NORMAL_GUESS: 25
+};
+
 function initializeLobby() {
     const lobbyPanel = document.getElementById('lobby-panel');
     const readyBtn = document.getElementById('readyBtn');
@@ -600,6 +726,8 @@ function updateGameSettings() {
 
 function toggleReady() {
     const player = players.get(username);
+    if (!player) return;
+    
     player.ready = !player.ready;
     
     const readyBtn = document.getElementById('readyBtn');
@@ -627,7 +755,8 @@ function updatePlayerList() {
         playerDiv.className = 'flex items-center justify-between p-2 hand-drawn bg-gray-50';
         playerDiv.innerHTML = `
             <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}</span>
-            <span class="flex items-center">
+            <span class="flex items-center gap-4">
+                <span class="text-sm">${data.score} pts</span>
                 <i class="fas fa-${data.ready ? 'check text-green-600' : 'clock text-yellow-600'}"></i>
             </span>
         `;
@@ -651,6 +780,93 @@ function startGame(isInitiator = true) {
     document.getElementById('container').classList.remove('hidden');
     
     if (isHost) {
+        currentDrawer = Array.from(players.keys())[0];
+        roundNumber = 1;
         nextRound();
     }
+}
+
+function updateScoreDisplay() {
+    const scoresDiv = document.getElementById('scores');
+    scoresDiv.innerHTML = '';
+    
+    const sortedPlayers = Array.from(players.entries())
+        .sort(([,a], [,b]) => b.score - a.score);
+    
+    sortedPlayers.forEach(([name, data]) => {
+        const scoreDiv = document.createElement('div');
+        scoreDiv.className = `flex justify-between items-center p-2 hand-drawn 
+            ${name === currentDrawer ? 'bg-purple-100' : 'bg-gray-50'}`;
+        scoreDiv.innerHTML = `
+            <span>${name} ${name === currentDrawer ? ' (Drawing)' : ''}</span>
+            <span class="font-bold">${data.score}</span>
+        `;
+        scoresDiv.appendChild(scoreDiv);
+    });
+}
+
+function endGame() {
+    const sortedPlayers = Array.from(players.entries())
+        .sort(([,a], [,b]) => b.score - a.score);
+    
+    const winner = sortedPlayers[0];
+    
+    sendData({
+        type: 'game_end',
+        winner: winner[0],
+        finalScores: sortedPlayers
+    });
+    
+    displayGameEnd(winner[0], sortedPlayers);
+}
+
+function displayGameEnd(winner, finalScores) {
+    const container = document.getElementById('container');
+    container.innerHTML = `
+        <div class="bg-white p-8 hand-drawn text-center">
+            <h2 class="text-3xl font-bold mb-6">
+                <i class="fas fa-crown text-yellow-500"></i>
+                ${winner === username ? 'You won!' : `${winner} wins!`}
+            </h2>
+            <div class="space-y-2 mb-6">
+                ${finalScores.map(([name, data]) => `
+                    <div class="flex justify-between items-center p-2 hand-drawn 
+                        ${name === winner ? 'bg-yellow-100' : 'bg-gray-50'}">
+                        <span>${name}</span>
+                        <span class="font-bold">${data.score} pts</span>
+                    </div>
+                `).join('')}
+            </div>
+            <button onclick="location.reload()" 
+                    class="hand-drawn-btn bg-green-400 px-6 py-3 font-bold hover:bg-green-500">
+                <i class="fas fa-redo mr-2"></i>Play Again
+            </button>
+        </div>
+    `;
+}
+
+let roundTimer;
+function startRoundTimer() {
+    if (roundTimer) clearInterval(roundTimer);
+    
+    let timeLeft = gameSettings.drawTime;
+    const timerDisplay = document.createElement('div');
+    timerDisplay.className = 'text-xl font-bold text-center mt-2';
+    wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
+    
+    roundTimer = setInterval(() => {
+        timeLeft--;
+        timerDisplay.textContent = `Time left: ${timeLeft}s`;
+        
+        if (timeLeft <= 0) {
+            clearInterval(roundTimer);
+            if (isHost) {
+                sendData({
+                    type: 'time_up',
+                    word: currentWord
+                });
+                setTimeout(nextRound, 3000);
+            }
+        }
+    }, 1000);
 }
