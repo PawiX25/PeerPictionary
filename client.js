@@ -472,6 +472,9 @@ function handleMessage(data) {
                 });
             }
             break;
+        case 'game_end':
+            displayGameEnd(data.winner, data.finalScores);
+            break;
     }
 }
 
@@ -982,6 +985,8 @@ function updateScoreDisplay() {
 }
 
 function endGame() {
+    if (!isHost) return;
+    
     const sortedPlayers = Array.from(players.entries())
         .sort(([,a], [,b]) => b.score - a.score);
     
@@ -997,7 +1002,16 @@ function endGame() {
 }
 
 function displayGameEnd(winner, finalScores) {
+    if (roundTimer) {
+        clearInterval(roundTimer);
+        roundTimer = null;
+    }
+
     const container = document.getElementById('container');
+    const lobbyPanel = document.getElementById('lobby-panel');
+    
+    lobbyPanel.classList.add('hidden');
+    
     container.innerHTML = `
         <div class="bg-white p-8 hand-drawn text-center">
             <h2 class="text-3xl font-bold mb-6">
