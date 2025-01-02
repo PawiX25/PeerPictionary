@@ -73,6 +73,7 @@ guessInput.addEventListener('keypress', (e) => {
             if (containsWord(guess, currentWord)) {
                 addChatMessage('<span class="text-red-600"><i class="fas fa-exclamation-circle"></i> You cannot reveal the word!</span>');
             } else {
+                addChatMessage(`${username}: ${guess}`);
                 sendData({
                     type: 'chat_message',
                     username: username,
@@ -87,6 +88,7 @@ guessInput.addEventListener('keypress', (e) => {
                         guesser.score += POINTS.FIRST_GUESS;
                         updateScoreDisplay();
                     }
+                    addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed the word!</span>`);
                     sendData({
                         type: 'correct_guess',
                         word: currentWord,
@@ -103,6 +105,7 @@ guessInput.addEventListener('keypress', (e) => {
                     });
                 }
             } else {
+                addChatMessage(`${username}: ${guess}`);
                 sendData({
                     type: 'guess',
                     guess: guess,
@@ -326,7 +329,6 @@ function handleMessage(data) {
                     }
                     
                     addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${data.username} guessed the word!</span>`);
-                    
                     sendData({
                         type: 'correct_guess',
                         word: currentWord,
@@ -346,7 +348,9 @@ function handleMessage(data) {
             break;
         
         case 'chat_message':
-            addChatMessage(`${data.username}: ${data.message}`);
+            if (data.username !== username) {
+                addChatMessage(`${data.username}: ${data.message}`);
+            }
             if (isHost) {
                 sendData(data);
             }
