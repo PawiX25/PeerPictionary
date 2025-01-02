@@ -1088,7 +1088,11 @@ function startRoundTimer(duration, serverTime = Date.now()) {
             updateTimerDisplay(currentTimeLeft);
             
             if (currentTimeLeft <= 0 && roundInProgress) {
-                endCurrentRound('timeout');
+                if (isHost) {
+                    endCurrentRound('timeout');
+                } else {
+                    clearTimers();
+                }
             }
         }
     };
@@ -1167,6 +1171,10 @@ function endCurrentRound(reason, data = {}) {
     if (!roundInProgress) return false;
     roundInProgress = false;
     clearTimers();
+
+    if (reason === 'timeout' && !isHost) {
+        return false;
+    }
 
     if (reason === 'guess') {
         const { username, guesser } = data;
