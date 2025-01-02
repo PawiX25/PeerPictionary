@@ -67,7 +67,7 @@ function containsWord(message, word) {
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         const guess = guessInput.value.trim();
-        if (!guess) return;
+        if (!guess || !roundInProgress) return;
 
         if (isDrawer) {
             if (containsWord(guess, currentWord)) {
@@ -83,19 +83,7 @@ guessInput.addEventListener('keypress', (e) => {
         } else {
             if (isHost) {
                 if (guess.toLowerCase() === currentWord.toLowerCase()) {
-                    const guesser = players.get(username);
-                    if (guesser) {
-                        guesser.score += POINTS.FIRST_GUESS;
-                        updateScoreDisplay();
-                    }
-                    addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed the word!</span>`);
-                    sendData({
-                        type: 'correct_guess',
-                        word: currentWord,
-                        username: username,
-                        scores: Array.from(players.entries())
-                    });
-                    setTimeout(nextRound, 3000);
+                    endCurrentRound('guess', { username, guesser: players.get(username) });
                 } else {
                     addChatMessage(`${username}: ${guess}`);
                     sendData({
@@ -140,6 +128,7 @@ function generateGameCode() {
 let connections = new Map();
 let hasAnyoneGuessed = false;
 let roundStartTime = Date.now();
+let roundInProgress = false;
 
 function createGame() {
     isHost = true;
@@ -276,6 +265,23 @@ function setupConnection(connection) {
                 state: canvas.toDataURL()
             });
         }
+
+        if (isHost && roundTimer) {
+            sendData({
+                type: 'timer_sync',
+                phase: roundTimer ? 'round' : 'transition',
+                timeLeft: parseInt(timerDisplay?.textContent.match(/\d+/)[0] || 0)
+            });
+        }
+
+        if (isHost && gamePhase !== 'waiting') {
+            sendData({
+                type: 'timer_sync',
+                phase: gamePhase,
+                timeLeft: currentTimeLeft,
+                serverTime: Date.now()
+            });
+        }
     });
     
     connection.on('data', handleMessage);
@@ -312,30 +318,10 @@ function handleMessage(data) {
             }
             break;
         case 'guess':
-            if (isHost) {
+            if (isHost && roundInProgress) {
                 if (data.guess.toLowerCase() === currentWord.toLowerCase()) {
                     const guesser = players.get(data.username);
-                    const timePassed = (Date.now() - roundStartTime) / 1000;
-                    
-                    if (guesser) {
-                        if (!hasAnyoneGuessed) {
-                            guesser.score += POINTS.FIRST_GUESS;
-                            hasAnyoneGuessed = true;
-                        } else if (timePassed < 10) {
-                            guesser.score += POINTS.QUICK_GUESS;
-                        } else {
-                            guesser.score += POINTS.NORMAL_GUESS;
-                        }
-                    }
-                    
-                    addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${data.username} guessed the word!</span>`);
-                    sendData({
-                        type: 'correct_guess',
-                        word: currentWord,
-                        username: data.username,
-                        scores: Array.from(players.entries())
-                    });
-                    setTimeout(nextRound, 3000);
+                    endCurrentRound('guess', { username: data.username, guesser });
                 } else {
                     addChatMessage(`${data.username}: ${data.guess}`);
                     sendData({
@@ -475,43 +461,70 @@ function handleMessage(data) {
         case 'game_end':
             displayGameEnd(data.winner, data.finalScores);
             break;
+        case 'time_up':
+            clearTimers();
+            gamePhase = 'transition';
+            addChatMessage(`<span class="text-red-600"><i class="fas fa-clock"></i> Time's up! The word was: ${data.word}</span>`);
+            startTransitionTimer(TRANSITION_TIME, data.serverTime);
+            break;
+        case 'timer_sync':
+            if (!isHost) {
+                if (data.phase === 'round') {
+                    startRoundTimer(data.timeLeft, data.serverTime);
+                } else if (data.phase === 'transition') {
+                    startTransitionTimer(data.timeLeft, data.serverTime);
+                }
+                gamePhase = data.phase;
+            }
+            break;
     }
 }
 
 function nextRound() {
-    if (isHost) {
-        const playerArray = Array.from(players.keys());
-        const currentIndex = playerArray.indexOf(currentDrawer);
-        const nextIndex = (currentIndex + 1) % playerArray.length;
-        currentDrawer = playerArray[nextIndex];
-        
-        roundNumber++;
-        currentWord = getRandomWord();
-        hasAnyoneGuessed = false;
-        roundStartTime = Date.now();
-        
-        if (roundNumber > gameSettings.rounds * playerArray.length) {
-            endGame();
-            return;
-        }
-        
-        sendData({
-            type: 'new_round',
-            word: currentWord,
-            drawer: currentDrawer,
-            roundNumber: roundNumber
-        });
-        
-        isDrawer = currentDrawer === username;
-        if (isDrawer) {
-            wordDisplay.textContent = `Draw: ${currentWord}`;
-        } else {
-            wordDisplay.textContent = 'Guess the word!';
-        }
-        
-        updateScoreDisplay();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!isHost) return;
+    
+    roundInProgress = true;
+    const playerArray = Array.from(players.keys());
+    const currentIndex = playerArray.indexOf(currentDrawer);
+    const nextIndex = (currentIndex + 1) % playerArray.length;
+    currentDrawer = playerArray[nextIndex];
+    
+    roundNumber++;
+    currentWord = getRandomWord();
+    hasAnyoneGuessed = false;
+    roundStartTime = Date.now();
+    
+    if (roundNumber > gameSettings.rounds * playerArray.length) {
+        endGame();
+        return;
     }
+    
+    sendData({
+        type: 'new_round',
+        word: currentWord,
+        drawer: currentDrawer,
+        roundNumber: roundNumber
+    });
+    
+    isDrawer = currentDrawer === username;
+    if (isDrawer) {
+        wordDisplay.textContent = `Draw: ${currentWord}`;
+    } else {
+        wordDisplay.textContent = 'Guess the word!';
+    }
+    
+    updateScoreDisplay();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    setTimeout(() => {
+        startRoundTimer(gameSettings.drawTime);
+        sendData({
+            type: 'timer_sync',
+            phase: 'round',
+            timeLeft: gameSettings.drawTime,
+            serverTime: Date.now()
+        });
+    }, 500);
 }
 
 function getRandomWord() {
@@ -855,6 +868,16 @@ const POINTS = {
     NORMAL_GUESS: 25
 };
 
+let gamePhase = 'waiting';
+let currentTimeLeft = 0;
+let lastServerSync = 0;
+let roundTimer = null;
+let transitionTimer = null;
+let timerDisplay = null;
+const TRANSITION_TIME = 5;
+const TIME_WARNING = 10;
+let lastDisplayedTime = -1;
+
 function initializeLobby() {
     const lobbyPanel = document.getElementById('lobby-panel');
     const readyBtn = document.getElementById('readyBtn');
@@ -985,6 +1008,12 @@ function updateScoreDisplay() {
 }
 
 function endGame() {
+    gamePhase = 'ended';
+    clearTimers();
+    if (timerDisplay) {
+        timerDisplay.remove();
+        timerDisplay = null;
+    }
     if (!isHost) return;
     
     const sortedPlayers = Array.from(players.entries())
@@ -1035,28 +1064,155 @@ function displayGameEnd(winner, finalScores) {
     `;
 }
 
-let roundTimer;
-function startRoundTimer() {
-    if (roundTimer) clearInterval(roundTimer);
+function startRoundTimer(duration, serverTime = Date.now()) {
+    clearTimers();
+    gamePhase = 'round';
+    roundInProgress = true;
+    currentTimeLeft = duration;
+    lastServerSync = serverTime;
+    lastDisplayedTime = -1;
     
-    let timeLeft = gameSettings.drawTime;
-    const timerDisplay = document.createElement('div');
-    timerDisplay.className = 'text-xl font-bold text-center mt-2';
-    wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
-    
-    roundTimer = setInterval(() => {
-        timeLeft--;
-        timerDisplay.textContent = `Time left: ${timeLeft}s`;
+    if (!timerDisplay) {
+        timerDisplay = document.createElement('div');
+        timerDisplay.className = 'text-xl font-bold text-center mt-2';
+        wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
+    }
+
+    const timerUpdate = () => {
+        const elapsed = Math.floor((Date.now() - lastServerSync) / 1000);
+        const newTimeLeft = Math.max(0, duration - elapsed);
         
-        if (timeLeft <= 0) {
-            clearInterval(roundTimer);
-            if (isHost) {
-                sendData({
-                    type: 'time_up',
-                    word: currentWord
-                });
-                setTimeout(nextRound, 3000);
+        if (newTimeLeft !== lastDisplayedTime) {
+            lastDisplayedTime = newTimeLeft;
+            currentTimeLeft = newTimeLeft;
+            updateTimerDisplay(currentTimeLeft);
+            
+            if (currentTimeLeft <= 0 && roundInProgress) {
+                endCurrentRound('timeout');
             }
         }
-    }, 1000);
+    };
+
+    timerUpdate();
+    roundTimer = setInterval(timerUpdate, 1000);
+}
+
+function startTransitionTimer(duration, serverTime = Date.now()) {
+    clearTimers();
+    gamePhase = 'transition';
+    currentTimeLeft = duration;
+    lastServerSync = serverTime;
+    lastDisplayedTime = -1;
+    
+    const timerUpdate = () => {
+        const elapsed = Math.floor((Date.now() - lastServerSync) / 1000);
+        const newTimeLeft = Math.max(0, duration - elapsed);
+        
+        if (newTimeLeft !== lastDisplayedTime) {
+            lastDisplayedTime = newTimeLeft;
+            currentTimeLeft = newTimeLeft;
+            updateTimerDisplay(currentTimeLeft, true);
+            
+            if (currentTimeLeft <= 0) {
+                clearTimers();
+                if (isHost) {
+                    nextRound();
+                }
+            }
+        }
+    };
+
+    timerUpdate();
+    transitionTimer = setInterval(timerUpdate, 1000);
+}
+
+function updateTimerDisplay(timeLeft, isTransition = false) {
+    if (!timerDisplay) return;
+
+    const timeStr = formatTime(timeLeft);
+    
+    if (isTransition) {
+        timerDisplay.innerHTML = `<span class="text-blue-600">Next round in: ${timeStr}</span>`;
+        return;
+    }
+
+    let colorClass = getTimerColorClass(timeLeft);
+    timerDisplay.innerHTML = `<span class="${colorClass}"><i class="fas fa-clock mr-2"></i>${timeStr}</span>`;
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getTimerColorClass(timeLeft) {
+    if (timeLeft <= 5) return 'text-red-600 animate-pulse';
+    if (timeLeft <= TIME_WARNING) return 'text-yellow-600';
+    return 'text-gray-800';
+}
+
+function clearTimers() {
+    if (roundTimer) {
+        clearInterval(roundTimer);
+        roundTimer = null;
+    }
+    if (transitionTimer) {
+        clearInterval(transitionTimer);
+        transitionTimer = null;
+    }
+}
+
+function endCurrentRound(reason, data = {}) {
+    if (!roundInProgress) return false;
+    roundInProgress = false;
+    clearTimers();
+
+    if (reason === 'guess') {
+        const { username, guesser } = data;
+        if (guesser) {
+            if (!hasAnyoneGuessed) {
+                guesser.score += POINTS.FIRST_GUESS;
+                hasAnyoneGuessed = true;
+            } else if ((Date.now() - roundStartTime) / 1000 < 10) {
+                guesser.score += POINTS.QUICK_GUESS;
+            } else {
+                guesser.score += POINTS.NORMAL_GUESS;
+            }
+        }
+        
+        addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed the word!</span>`);
+        if (isHost) {
+            sendData({
+                type: 'correct_guess',
+                word: currentWord,
+                username: username,
+                scores: Array.from(players.entries())
+            });
+            setTimeout(() => {
+                const serverTime = Date.now();
+                startTransitionTimer(TRANSITION_TIME, serverTime);
+                sendData({
+                    type: 'timer_sync',
+                    phase: 'transition',
+                    timeLeft: TRANSITION_TIME,
+                    serverTime: serverTime
+                });
+            }, 2000);
+        }
+    } else if (reason === 'timeout') {
+        gamePhase = 'transition';
+        addChatMessage(`<span class="text-red-600"><i class="fas fa-clock"></i> Time's up! The word was: ${currentWord}</span>`);
+        if (isHost) {
+            const serverTime = Date.now();
+            sendData({
+                type: 'time_up',
+                word: currentWord,
+                serverTime: serverTime
+            });
+            startTransitionTimer(TRANSITION_TIME, serverTime);
+        }
+    }
+
+    return true;
 }
