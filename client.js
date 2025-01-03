@@ -12,6 +12,10 @@ let username = '';
 
 let isFillMode = false;
 let isEraserMode = false;
+let wordChoiceTimeLeft = 0;
+let wordChoiceTimer = null;
+let wordSelectionTimer = null;
+const WORD_SELECTION_TIME = 15;
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -351,8 +355,7 @@ function handleMessage(data) {
             currentDrawer = data.drawer;
             isDrawer = currentDrawer === username;
             if (isDrawer) {
-                currentWord = data.word;
-                wordDisplay.textContent = `Draw: ${currentWord}`;
+                showWordSelectionModal(getRandomWords(3));
             } else {
                 wordDisplay.textContent = 'Guess the word!';
             }
@@ -466,18 +469,64 @@ function handleMessage(data) {
             gamePhase = 'transition';
             addChatMessage(`<span class="text-red-600"><i class="fas fa-clock"></i> Time's up! The word was: ${data.word}</span>`);
             startTransitionTimer(TRANSITION_TIME, data.serverTime);
+            if (isHost) {
+                sendData(data);
+            }
             break;
         case 'timer_sync':
-            if (!isHost) {
-                if (data.phase === 'round') {
-                    startRoundTimer(data.timeLeft, data.serverTime);
-                } else if (data.phase === 'transition') {
-                    startTransitionTimer(data.timeLeft, data.serverTime);
+            clearTimers();
+            if (data.phase === 'round') {
+                startRoundTimer(data.timeLeft, data.serverTime);
+            } else if (data.phase === 'transition') {
+                startTransitionTimer(data.timeLeft, data.serverTime);
+            }
+            gamePhase = data.phase;
+            break;
+        case 'selecting_word':
+            if (!isDrawer) {
+                wordDisplay.textContent = `${data.username} is choosing a word...`;
+                clearTimers();
+                startWordSelectionTimer();
+                if (isHost) {
+                    sendData(data);
                 }
-                gamePhase = data.phase;
+            }
+            break;
+        case 'word_selected':
+            if (!isDrawer) {
+                currentWord = data.word;
+                wordDisplay.textContent = 'Guess the word!';
+            }
+            const serverTime = data.serverTime;
+            clearTimers();
+            startRoundTimer(gameSettings.drawTime, serverTime);
+            
+            if (isHost) {
+                sendData(data);
             }
             break;
     }
+}
+
+function startWordSelectionTimer() {
+    wordChoiceTimeLeft = WORD_SELECTION_TIME;
+    
+    timerDisplay = document.createElement('div');
+    timerDisplay.className = 'text-xl font-bold text-center mt-2';
+    wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
+    
+    const updateTimer = () => {
+        if (timerDisplay) {
+            timerDisplay.innerHTML = `<span class="text-purple-600">Choosing word: ${wordChoiceTimeLeft}s</span>`;
+        }
+        if (wordChoiceTimeLeft <= 0) {
+            clearTimers();
+        }
+        wordChoiceTimeLeft--;
+    };
+    
+    updateTimer();
+    wordChoiceTimer = setInterval(updateTimer, 1000);
 }
 
 function nextRound() {
@@ -490,7 +539,6 @@ function nextRound() {
     currentDrawer = playerArray[nextIndex];
     
     roundNumber++;
-    currentWord = getRandomWord();
     hasAnyoneGuessed = false;
     roundStartTime = Date.now();
     
@@ -501,30 +549,19 @@ function nextRound() {
     
     sendData({
         type: 'new_round',
-        word: currentWord,
         drawer: currentDrawer,
         roundNumber: roundNumber
     });
     
     isDrawer = currentDrawer === username;
     if (isDrawer) {
-        wordDisplay.textContent = `Draw: ${currentWord}`;
+        showWordSelectionModal(getRandomWords(3));
     } else {
         wordDisplay.textContent = 'Guess the word!';
     }
     
     updateScoreDisplay();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    setTimeout(() => {
-        startRoundTimer(gameSettings.drawTime);
-        sendData({
-            type: 'timer_sync',
-            phase: 'round',
-            timeLeft: gameSettings.drawTime,
-            serverTime: Date.now()
-        });
-    }, 500);
 }
 
 function getRandomWord() {
@@ -1066,6 +1103,11 @@ function displayGameEnd(winner, finalScores) {
 
 function startRoundTimer(duration, serverTime = Date.now()) {
     clearTimers();
+    
+    timerDisplay = document.createElement('div');
+    timerDisplay.className = 'text-xl font-bold text-center mt-2';
+    wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
+    
     gamePhase = 'round';
     roundInProgress = true;
     currentTimeLeft = duration;
@@ -1103,6 +1145,11 @@ function startRoundTimer(duration, serverTime = Date.now()) {
 
 function startTransitionTimer(duration, serverTime = Date.now()) {
     clearTimers();
+    
+    timerDisplay = document.createElement('div');
+    timerDisplay.className = 'text-xl font-bold text-center mt-2';
+    wordDisplay.parentNode.insertBefore(timerDisplay, wordDisplay.nextSibling);
+    
     gamePhase = 'transition';
     currentTimeLeft = duration;
     lastServerSync = serverTime;
@@ -1165,6 +1212,18 @@ function clearTimers() {
         clearInterval(transitionTimer);
         transitionTimer = null;
     }
+    if (timerDisplay) {
+        timerDisplay.remove();
+        timerDisplay = null;
+    }
+    if (wordSelectionTimer) {
+        clearInterval(wordSelectionTimer);
+        wordSelectionTimer = null;
+    }
+    if (wordChoiceTimer) {
+        clearInterval(wordChoiceTimer);
+        wordChoiceTimer = null;
+    }
 }
 
 function endCurrentRound(reason, data = {}) {
@@ -1197,30 +1256,90 @@ function endCurrentRound(reason, data = {}) {
                 username: username,
                 scores: Array.from(players.entries())
             });
-            setTimeout(() => {
-                const serverTime = Date.now();
-                startTransitionTimer(TRANSITION_TIME, serverTime);
-                sendData({
-                    type: 'timer_sync',
-                    phase: 'transition',
-                    timeLeft: TRANSITION_TIME,
-                    serverTime: serverTime
-                });
-            }, 2000);
+            const serverTime = Date.now();
+            startTransitionTimer(TRANSITION_TIME, serverTime);
+            sendData({
+                type: 'timer_sync',
+                phase: 'transition',
+                timeLeft: TRANSITION_TIME,
+                serverTime: serverTime
+            });
         }
     } else if (reason === 'timeout') {
         gamePhase = 'transition';
         addChatMessage(`<span class="text-red-600"><i class="fas fa-clock"></i> Time's up! The word was: ${currentWord}</span>`);
         if (isHost) {
             const serverTime = Date.now();
+            startTransitionTimer(TRANSITION_TIME, serverTime);
             sendData({
                 type: 'time_up',
                 word: currentWord,
                 serverTime: serverTime
             });
-            startTransitionTimer(TRANSITION_TIME, serverTime);
         }
     }
 
     return true;
+}
+
+function showWordSelectionModal(wordChoices) {
+    const modal = document.getElementById('word-select-modal');
+    const choicesContainer = document.getElementById('word-choices');
+    
+    sendData({
+        type: 'selecting_word',
+        username: username
+    });
+    
+    const timerDiv = document.createElement('div');
+    timerDiv.className = 'text-xl font-bold text-center mb-4';
+    modal.querySelector('h3').after(timerDiv);
+    
+    let timeLeft = WORD_SELECTION_TIME;
+    const updateTimer = () => {
+        timerDiv.innerHTML = `<span class="text-purple-600">Choose in: ${timeLeft}s</span>`;
+        if (timeLeft <= 0) {
+            const randomWord = wordChoices[Math.floor(Math.random() * wordChoices.length)];
+            selectWord(randomWord);
+        }
+        timeLeft--;
+    };
+    
+    updateTimer();
+    wordSelectionTimer = setInterval(updateTimer, 1000);
+    
+    function selectWord(word) {
+        clearInterval(wordSelectionTimer);
+        modal.classList.add('hidden');
+        currentWord = word;
+        wordDisplay.textContent = `Draw: ${word}`;
+        const serverTime = Date.now();
+        
+        sendData({
+            type: 'word_selected',
+            word: word,
+            serverTime: serverTime
+        });
+        
+        clearTimers();
+        startRoundTimer(gameSettings.drawTime, serverTime);
+    }
+    
+    wordDisplay.textContent = 'Choosing a word...';
+    choicesContainer.innerHTML = '';
+    
+    wordChoices.forEach(word => {
+        const button = document.createElement('button');
+        button.className = 'w-full hand-drawn-btn bg-purple-400 px-6 py-3 font-bold hover:bg-purple-500 mb-2';
+        button.textContent = word;
+        button.onclick = () => selectWord(word);
+        choicesContainer.appendChild(button);
+    });
+    
+    modal.classList.remove('hidden');
+}
+
+function getRandomWords(count = 3) {
+    const shuffled = [...words].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
 }
