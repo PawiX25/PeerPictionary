@@ -313,6 +313,7 @@ function handleMessage(data) {
             players.set(data.username, { ready: false, score: 0 });
             addChatMessage(`${data.username} joined the game!`);
             updatePlayerList();
+            updateScoreDisplay();
             
             if (isHost) {
                 sendData({
@@ -350,6 +351,16 @@ function handleMessage(data) {
             players = new Map(data.scores);
             updateScoreDisplay();
             addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${data.username} guessed the word!</span>`);
+            if (isHost) {
+                const serverTime = Date.now();
+                startTransitionTimer(TRANSITION_TIME, serverTime);
+                sendData({
+                    type: 'timer_sync',
+                    phase: 'transition',
+                    timeLeft: TRANSITION_TIME,
+                    serverTime: serverTime
+                });
+            }
             break;
         case 'new_round':
             currentDrawer = data.drawer;
@@ -935,6 +946,7 @@ function initializeLobby() {
     
     players.set(username, { ready: false, score: 0 });
     updatePlayerList();
+    updateScoreDisplay();
 }
 
 function updateGameSettings() {
@@ -1246,6 +1258,7 @@ function endCurrentRound(reason, data = {}) {
             } else {
                 guesser.score += POINTS.NORMAL_GUESS;
             }
+            updateScoreDisplay();
         }
         
         addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed the word!</span>`);
