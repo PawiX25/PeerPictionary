@@ -1286,13 +1286,20 @@ function showWordSelectionModal(wordChoices) {
     const modal = document.getElementById('word-select-modal');
     const choicesContainer = document.getElementById('word-choices');
     
+    clearTimers();
+    
+    const existingTimerDiv = modal.querySelector('.timer-div');
+    if (existingTimerDiv) {
+        existingTimerDiv.remove();
+    }
+    
     sendData({
         type: 'selecting_word',
         username: username
     });
     
     const timerDiv = document.createElement('div');
-    timerDiv.className = 'text-xl font-bold text-center mb-4';
+    timerDiv.className = 'text-xl font-bold text-center mb-4 timer-div';
     modal.querySelector('h3').after(timerDiv);
     
     let timeLeft = WORD_SELECTION_TIME;
