@@ -922,18 +922,6 @@ function redrawCanvas() {
     isUndoRedoing = false;
 }
 
-function stopDrawing() {
-    if (isDrawing && currentPath.length > 0) {
-        undoStack.push({
-            type: 'path',
-            data: compressPath(currentPath)
-        });
-        redoStack = [];
-    }
-    isDrawing = false;
-    currentPath = [];
-}
-
 function addChatMessage(message) {
     const div = document.createElement('div');
     div.innerHTML = message;
