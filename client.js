@@ -594,6 +594,12 @@ function handleMessage(data) {
             updatePlayerList();
             updateScoreDisplay();
             break;
+        case 'round_complete':
+            clearTimers();
+            gamePhase = 'transition';
+            addChatMessage(`<span class="text-blue-600"><i class="fas fa-star"></i> Everyone has guessed the word: ${data.word}</span>`);
+            startTransitionTimer(TRANSITION_TIME, data.serverTime);
+            break;
     }
 }
 
@@ -666,6 +672,11 @@ function nextRound() {
     
     updateScoreDisplay();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    correctGuesses = new Set();
+    totalPossibleGuessers = Array.from(players.entries())
+        .filter(([name, data]) => !data.isSpectator && name !== currentDrawer)
+        .length;
 }
 
 function getRandomWord() {
@@ -1074,6 +1085,9 @@ const TRANSITION_TIME = 5;
 const TIME_WARNING = 10;
 let lastDisplayedTime = -1;
 
+let correctGuesses = new Set();
+let totalPossibleGuessers = 0;
+
 function initializeLobby() {
     const lobbyPanel = document.getElementById('lobby-panel');
     const readyBtn = document.getElementById('readyBtn');
@@ -1419,8 +1433,6 @@ function clearTimers() {
 
 function endCurrentRound(reason, data = {}) {
     if (!roundInProgress) return false;
-    roundInProgress = false;
-    clearTimers();
 
     if (reason === 'timeout' && !isHost) {
         return false;
@@ -1428,7 +1440,8 @@ function endCurrentRound(reason, data = {}) {
 
     if (reason === 'guess') {
         const { username, guesser } = data;
-        if (guesser) {
+        if (guesser && !correctGuesses.has(username)) {
+            correctGuesses.add(username);
             if (!hasAnyoneGuessed) {
                 guesser.score += POINTS.FIRST_GUESS;
                 hasAnyoneGuessed = true;
@@ -1440,24 +1453,36 @@ function endCurrentRound(reason, data = {}) {
             updateScoreDisplay();
         }
         
-        addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed the word!</span>`);
+        addChatMessage(`<span class="text-green-600"><i class="fas fa-check-circle"></i> ${username} guessed correctly!</span>`);
         if (isHost) {
             sendData({
                 type: 'correct_guess',
-                word: currentWord,
+                word: null,
                 username: username,
                 scores: Array.from(players.entries())
             });
-            const serverTime = Date.now();
-            startTransitionTimer(TRANSITION_TIME, serverTime);
-            sendData({
-                type: 'timer_sync',
-                phase: 'transition',
-                timeLeft: TRANSITION_TIME,
-                serverTime: serverTime
-            });
+
+            const remainingGuessers = Array.from(players.entries())
+                .filter(([name, data]) => !data.isSpectator && name !== currentDrawer && !correctGuesses.has(name))
+                .length;
+
+            if (remainingGuessers === 0) {
+                roundInProgress = false;
+                clearTimers();
+                const serverTime = Date.now();
+                addChatMessage(`<span class="text-blue-600"><i class="fas fa-star"></i> Everyone has guessed the word: ${currentWord}</span>`);
+                startTransitionTimer(TRANSITION_TIME, serverTime);
+                sendData({
+                    type: 'round_complete',
+                    word: currentWord,
+                    serverTime: serverTime
+                });
+            }
+            return true;
         }
     } else if (reason === 'timeout') {
+        roundInProgress = false;
+        clearTimers();
         gamePhase = 'transition';
         addChatMessage(`<span class="text-red-600"><i class="fas fa-clock"></i> Time's up! The word was: ${currentWord}</span>`);
         if (isHost) {
