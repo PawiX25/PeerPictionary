@@ -71,7 +71,13 @@ function containsWord(message, word) {
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         const guess = guessInput.value.trim();
-        if (!guess || !roundInProgress) return;
+        if (!guess || !roundInProgress || isSpectator) {
+            if (isSpectator) {
+                addChatMessage('<span class="text-red-600"><i class="fas fa-exclamation-circle"></i> Spectators cannot make guesses until the next round.</span>');
+            }
+            guessInput.value = '';
+            return;
+        }
 
         if (isDrawer) {
             if (containsWord(guess, currentWord)) {
@@ -133,6 +139,7 @@ let connections = new Map();
 let hasAnyoneGuessed = false;
 let roundStartTime = Date.now();
 let roundInProgress = false;
+let isSpectator = false;
 
 function createGame() {
     isHost = true;
@@ -190,7 +197,14 @@ function createGame() {
                 settings: gameSettings,
                 currentDrawer: currentDrawer,
                 currentWord: currentWord,
-                roundNumber: roundNumber
+                roundNumber: roundNumber,
+                gameInProgress: roundInProgress,
+                gamePhase: gamePhase,
+                timerData: roundTimer || transitionTimer ? {
+                    phase: gamePhase,
+                    timeLeft: currentTimeLeft,
+                    serverTime: Date.now()
+                } : null
             });
         });
     });
@@ -255,11 +269,15 @@ function setupConnection(connection) {
             isHost: isHost
         });
         updateStatus('Connected!');
-        initializeLobby();
+        
+        if (gamePhase === 'waiting') {
+            initializeLobby();
+        }
         
         if (!isHost) {
             sendData({
-                type: 'request_sync'
+                type: 'request_sync',
+                joinTime: Date.now()
             });
         }
         
@@ -363,6 +381,14 @@ function handleMessage(data) {
             }
             break;
         case 'new_round':
+            if (isSpectator) {
+                isSpectator = false;
+                const player = players.get(username);
+                if (player) {
+                    player.isSpectator = false;
+                    addChatMessage(`<span class="text-green-600"><i class="fas fa-user-plus"></i> You are now an active player!</span>`);
+                }
+            }
             currentDrawer = data.drawer;
             isDrawer = currentDrawer === username;
             if (isDrawer) {
@@ -429,6 +455,9 @@ function handleMessage(data) {
             }
             break;
         case 'start_game':
+            document.getElementById('lobby-panel').classList.add('hidden');
+            document.getElementById('container').classList.remove('hidden');
+            document.getElementById('container').style.display = 'flex';
             startGame(false);
             break;
         case 'player_sync':
@@ -460,6 +489,39 @@ function handleMessage(data) {
                 currentDrawer = data.currentDrawer;
                 currentWord = data.currentWord;
                 roundNumber = data.roundNumber;
+                gamePhase = data.gamePhase;
+                
+                if (data.gameInProgress) {
+                    document.getElementById('lobby-panel').classList.add('hidden');
+                    document.getElementById('container').classList.remove('hidden');
+                    document.getElementById('container').style.display = 'flex';
+                    
+                    if (!players.has(username)) {
+                        isSpectator = true;
+                        players.set(username, { 
+                            ready: true, 
+                            score: 0, 
+                            isSpectator: true 
+                        });
+                        addChatMessage(`<span class="text-blue-600"><i class="fas fa-eye"></i> You joined as a spectator and will be able to play starting next round.</span>`);
+                        
+                        if (data.currentWord) {
+                            wordDisplay.textContent = 'Guess the word!';
+                        }
+                        
+                        if (data.timerData) {
+                            clearTimers();
+                            if (data.timerData.phase === 'round') {
+                                startRoundTimer(data.timerData.timeLeft, data.timerData.serverTime);
+                            } else if (data.timerData.phase === 'transition') {
+                                startTransitionTimer(data.timerData.timeLeft, data.timerData.serverTime);
+                            }
+                        }
+                    }
+                } else {
+                    initializeLobby();
+                }
+                
                 updatePlayerList();
                 updateScoreDisplay();
             }
@@ -516,6 +578,20 @@ function handleMessage(data) {
                 sendData(data);
             }
             break;
+        case 'spectator_converted':
+            if (data.username === username) {
+                isSpectator = false;
+                const player = players.get(username);
+                if (player) {
+                    player.isSpectator = false;
+                    addChatMessage(`<span class="text-green-600"><i class="fas fa-user-plus"></i> You are now an active player!</span>`);
+                    guessInput.disabled = false;
+                    guessInput.placeholder = "Type your guess...";
+                }
+            }
+            updatePlayerList();
+            updateScoreDisplay();
+            break;
     }
 }
 
@@ -542,6 +618,21 @@ function startWordSelectionTimer() {
 
 function nextRound() {
     if (!isHost) return;
+    
+    const spectatorsToConvert = [];
+    players.forEach((data, playerName) => {
+        if (data.isSpectator) {
+            data.isSpectator = false;
+            spectatorsToConvert.push(playerName);
+        }
+    });
+    
+    spectatorsToConvert.forEach(playerName => {
+        sendData({
+            type: 'spectator_converted',
+            username: playerName
+        });
+    });
     
     roundInProgress = true;
     const playerArray = Array.from(players.keys());
@@ -1005,7 +1096,8 @@ function updatePlayerList() {
         const playerDiv = document.createElement('div');
         playerDiv.className = 'flex items-center justify-between p-2 hand-drawn bg-gray-50';
         playerDiv.innerHTML = `
-            <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}</span>
+            <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}
+                  ${data.isSpectator ? ' <i class="fas fa-eye text-blue-500" title="Spectator"></i>' : ''}</span>
             <span class="flex items-center gap-4">
                 <span class="text-sm">${data.score} pts</span>
                 <i class="fas fa-${data.ready ? 'check text-green-600' : 'clock text-yellow-600'}"></i>
@@ -1015,7 +1107,9 @@ function updatePlayerList() {
     });
     
     if (isHost) {
-        const allReady = Array.from(players.values()).every(p => p.ready);
+        const allReady = Array.from(players.values())
+            .filter(p => !p.isSpectator)
+            .every(p => p.ready);
         const startBtn = document.getElementById('startBtn');
         startBtn.disabled = !allReady;
         startBtn.classList.toggle('opacity-50', !allReady);
@@ -1024,15 +1118,30 @@ function updatePlayerList() {
 
 function startGame(isInitiator = true) {
     if (isInitiator && isHost) {
-        sendData({ type: 'start_game' });
+        sendData({ 
+            type: 'start_game',
+            serverTime: Date.now()
+        });
     }
     
     document.getElementById('lobby-panel').classList.add('hidden');
     document.getElementById('container').classList.remove('hidden');
+    document.getElementById('container').style.display = 'flex';
     
     if (isHost) {
         currentDrawer = Array.from(players.keys())[0];
         roundNumber = 1;
+        sendData({
+            type: 'game_state',
+            players: Array.from(players.entries()),
+            settings: gameSettings,
+            currentDrawer: currentDrawer,
+            currentWord: currentWord,
+            roundNumber: roundNumber,
+            gameInProgress: true,
+            gamePhase: 'starting',
+            serverTime: Date.now()
+        });
         nextRound();
     }
 }
@@ -1041,7 +1150,20 @@ function updateScoreDisplay() {
     const scoresDiv = document.getElementById('scores');
     scoresDiv.innerHTML = '';
     
+    if (isSpectator) {
+        const spectatorDiv = document.createElement('div');
+        spectatorDiv.className = 'mb-4 p-2 hand-drawn bg-blue-100';
+        spectatorDiv.innerHTML = `
+            <div class="text-center text-blue-600">
+                <i class="fas fa-eye"></i> You are spectating
+                <div class="text-sm">You'll be able to play in the next round</div>
+            </div>
+        `;
+        scoresDiv.appendChild(spectatorDiv);
+    }
+    
     const sortedPlayers = Array.from(players.entries())
+        .filter(([, data]) => !data.isSpectator)
         .sort(([,a], [,b]) => b.score - a.score);
     
     sortedPlayers.forEach(([name, data]) => {
