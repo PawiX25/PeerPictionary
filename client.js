@@ -336,6 +336,9 @@ function handleMessage(data) {
             updateScoreDisplay();
             
             if (isHost) {
+                if (gamePhase === 'waiting') {
+                    initializeLobby();
+                }
                 sendData({
                     type: 'player_sync',
                     players: Array.from(players.entries())
