@@ -40,6 +40,8 @@ const eraserBtn = document.getElementById('eraserBtn');
 
 let undoStack = [];
 let redoStack = [];
+let currentPath = [];
+let isUndoRedoing = false;
 
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
@@ -681,6 +683,17 @@ function getCanvasPoint(e) {
     return { x, y };
 }
 
+function compressPath(path) {
+    return path.map(p => [
+        Math.round(p.x0), 
+        Math.round(p.y0),
+        Math.round(p.x1), 
+        Math.round(p.y1),
+        p.color,
+        p.size
+    ]);
+}
+
 function startDrawing(e) {
     if (!isDrawer) return;
     
@@ -688,6 +701,13 @@ function startDrawing(e) {
     
     if (isFillMode) {
         floodFill(Math.floor(point.x), Math.floor(point.y), colorPicker.value);
+        undoStack.push({
+            type: 'fill',
+            x: Math.floor(point.x),
+            y: Math.floor(point.y),
+            color: colorPicker.value
+        });
+        redoStack = [];
         sendData({
             type: 'fill',
             x: Math.floor(point.x),
@@ -697,12 +717,8 @@ function startDrawing(e) {
         return;
     }
     
-    if (!isFillMode) {
-        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        redoStack = [];
-    }
-    
     isDrawing = true;
+    currentPath = [];
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
     ctx.lastX = point.x;
@@ -713,23 +729,48 @@ function draw(e) {
     if (!isDrawing || !isDrawer) return;
     
     const point = getCanvasPoint(e);
-    
     const currentColor = isEraserMode ? '#FFFFFF' : colorPicker.value;
     const currentSize = isEraserMode ? parseInt(brushSize.value) * 2 : brushSize.value;
     
+    if (!isUndoRedoing) {
+        currentPath.push({
+            x0: ctx.lastX,
+            y0: ctx.lastY,
+            x1: point.x,
+            y1: point.y,
+            color: currentColor,
+            size: currentSize
+        });
+    }
+    
     drawLine(ctx.lastX, ctx.lastY, point.x, point.y, currentColor, currentSize);
-    sendData({
-        type: 'drawing',
-        x0: ctx.lastX,
-        y0: ctx.lastY,
-        x1: point.x,
-        y1: point.y,
-        color: currentColor,
-        size: currentSize
-    });
+    
+    if (!isUndoRedoing) {
+        sendData({
+            type: 'drawing',
+            x0: ctx.lastX,
+            y0: ctx.lastY,
+            x1: point.x,
+            y1: point.y,
+            color: currentColor,
+            size: currentSize
+        });
+    }
     
     ctx.lastX = point.x;
     ctx.lastY = point.y;
+}
+
+function stopDrawing() {
+    if (isDrawing && currentPath.length > 0) {
+        undoStack.push({
+            type: 'path',
+            data: compressPath(currentPath)
+        });
+        redoStack = [];
+    }
+    isDrawing = false;
+    currentPath = [];
 }
 
 canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
@@ -845,8 +886,52 @@ function drawLine(x0, y0, x1, y1, color = '#000000', size = 2) {
     ctx.stroke();
 }
 
+function undo() {
+    if (!isDrawer || undoStack.length === 0) return;
+    
+    const operation = undoStack.pop();
+    redoStack.push(operation);
+    
+    redrawCanvas();
+    sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+}
+
+function redo() {
+    if (!isDrawer || redoStack.length === 0) return;
+    
+    const operation = redoStack.pop();
+    undoStack.push(operation);
+    
+    redrawCanvas();
+    sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+}
+
+function redrawCanvas() {
+    isUndoRedoing = true;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    for (const operation of undoStack) {
+        if (operation.type === 'fill') {
+            floodFill(operation.x, operation.y, operation.color);
+        } else if (operation.type === 'path') {
+            for (const [x0, y0, x1, y1, color, size] of operation.data) {
+                drawLine(x0, y0, x1, y1, color, size);
+            }
+        }
+    }
+    isUndoRedoing = false;
+}
+
 function stopDrawing() {
+    if (isDrawing && currentPath.length > 0) {
+        undoStack.push({
+            type: 'path',
+            data: compressPath(currentPath)
+        });
+        redoStack = [];
+    }
     isDrawing = false;
+    currentPath = [];
 }
 
 function addChatMessage(message) {
@@ -911,6 +996,8 @@ function copyGameCode(code) {
 function clearCanvas() {
     if (!isDrawer) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    undoStack = [];
+    redoStack = [];
     sendData({ type: 'clear_canvas' });
 }
 
@@ -956,24 +1043,6 @@ function colorMatch(c1, c2) {
            Math.abs(c1[1] - c2[1]) < 5 && 
            Math.abs(c1[2] - c2[2]) < 5 && 
            Math.abs(c1[3] - c2[3]) < 5;
-}
-
-function undo() {
-    if (undoStack.length > 0) {
-        redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        const previousState = undoStack.pop();
-        ctx.putImageData(previousState, 0, 0);
-        sendData({ type: 'canvas_state', state: canvas.toDataURL() });
-    }
-}
-
-function redo() {
-    if (redoStack.length > 0) {
-        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        const nextState = redoStack.pop();
-        ctx.putImageData(nextState, 0, 0);
-        sendData({ type: 'canvas_state', state: canvas.toDataURL() });
-    }
 }
 
 function toggleFillMode() {
