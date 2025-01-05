@@ -49,6 +49,9 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
   - Final scoreboard
   - Winner announcement
   - Play again option
+- **Spectator Mode**
+  - Join games as a spectator to watch ongoing rounds
+  - Automatically convert to a player in the next round
 
 ## How to Play
 
