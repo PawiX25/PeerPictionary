@@ -330,7 +330,7 @@ function handleMessage(data) {
             }
             break;
         case 'user_info':
-            players.set(data.username, { ready: false, score: 0 });
+            players.set(data.username, { ready: false, score: 0, isSpectator: roundInProgress });
             addChatMessage(`${data.username} joined the game!`);
             updatePlayerList();
             updateScoreDisplay();
@@ -1473,7 +1473,14 @@ function endCurrentRound(reason, data = {}) {
                 roundInProgress = false;
                 clearTimers();
                 const serverTime = Date.now();
-                addChatMessage(`<span class="text-blue-600"><i class="fas fa-star"></i> Everyone has guessed the word: ${currentWord}</span>`);
+                
+                const activePlayers = Array.from(players.entries())
+                    .filter(([name, data]) => !data.isSpectator).length;
+                    
+                if (activePlayers > 2) {
+                    addChatMessage(`<span class="text-blue-600"><i class="fas fa-star"></i> Everyone has guessed the word: ${currentWord}</span>`);
+                }
+                
                 startTransitionTimer(TRANSITION_TIME, serverTime);
                 sendData({
                     type: 'round_complete',
