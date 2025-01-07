@@ -1,18 +1,54 @@
 {
     "animals": [
-        "dog", "cat", "elephant", "giraffe", "penguin", "lion", "tiger", "zebra", "monkey", "kangaroo",
-        "koala", "panda", "dolphin", "whale", "shark", "octopus", "eagle", "owl", "parrot", "butterfly"
+        "dog", "cat", "bird", "fish", "rabbit", "snake", "mouse", "duck", "pig", "cow",
+        "horse", "chicken", "sheep", "frog", "bear", "penguin", "monkey", "giraffe", "lion", "turtle",
+        "butterfly", "bee", "ant", "spider", "elephant", "fox", "wolf", "deer", "seal", "whale"
     ],
     "food": [
-        "pizza", "hamburger", "spaghetti", "sushi", "taco", "ice cream", "cake", "cookie", "sandwich", "hotdog",
-        "salad", "chocolate", "popcorn", "bread", "donut", "pancake", "waffle", "apple", "banana", "orange"
+        "pizza", "apple", "banana", "cookie", "cake", "ice cream", "sandwich", "hotdog", "hamburger", "egg",
+        "bread", "donut", "carrot", "cherry", "lemon", "milk", "candy", "cheese", "taco", "sushi",
+        "popcorn", "watermelon", "cupcake", "corn", "pear", "orange", "chocolate", "potato", "pasta", "rice"
     ],
     "objects": [
-        "chair", "table", "lamp", "phone", "computer", "book", "pencil", "clock", "glasses", "umbrella",
-        "camera", "television", "bicycle", "car", "airplane", "train", "boat", "guitar", "piano", "drum"
+        "chair", "table", "bed", "door", "window", "book", "pen", "pencil", "cup", "bowl",
+        "phone", "key", "clock", "lamp", "hat", "shoe", "sock", "glasses", "camera", "ball",
+        "box", "bag", "brush", "gift", "bottle", "umbrella", "mirror", "laptop", "pillow", "wallet"
     ],
-    "activities": [
-        "swimming", "running", "dancing", "singing", "reading", "writing", "painting", "cooking", "sleeping", "jumping",
-        "skating", "skiing", "surfing", "fishing", "hiking", "camping", "gaming", "shopping", "gardening", "yoga"
+    "nature": [
+        "sun", "moon", "star", "cloud", "rain", "snow", "tree", "flower", "grass", "mountain",
+        "beach", "ocean", "river", "leaf", "rainbow", "rock", "fire", "island", "wave", "desert",
+        "forest", "cactus", "mushroom", "tornado", "palm tree", "pond", "cave", "volcano", "earth", "waterfall"
+    ],
+    "vehicles": [
+        "car", "bus", "bike", "boat", "ship", "train", "plane", "truck", "helicopter", "rocket",
+        "taxi", "ambulance", "police car", "fire truck", "skateboard", "submarine", "tractor", "scooter", "wagon", "sled"
+    ],
+    "clothes": [
+        "shirt", "pants", "dress", "hat", "shoes", "socks", "gloves", "scarf", "glasses", "watch",
+        "coat", "boots", "crown", "belt", "tie", "sweater", "skirt", "ring", "necklace", "backpack"
+    ],
+    "sports": [
+        "ball", "bat", "goal", "tennis", "soccer", "golf", "pool", "bowling", "ski", "football",
+        "basketball", "baseball", "volleyball", "skateboard", "surfboard", "hockey", "boxing", "dart", "jump rope", "medal"
+    ],
+    "buildings": [
+        "house", "school", "hospital", "church", "castle", "tower", "bridge", "store", "barn", "tent",
+        "hotel", "factory", "farm", "cabin", "igloo", "lighthouse", "windmill", "pyramid", "garage", "shed"
+    ],
+    "emoji": [
+        "smile", "sad", "angry", "laugh", "cry", "wink", "cool", "heart", "star", "thumbs up",
+        "kiss", "sleep", "sick", "devil", "angel", "zombie", "alien", "robot", "ghost", "poop"
+    ],
+    "music": [
+        "drum", "guitar", "piano", "violin", "flute", "bell", "radio", "note", "microphone", "speaker",
+        "trumpet", "harp", "harmonica", "xylophone", "tambourine", "headphones", "bass", "disc", "keyboard", "record"
+    ],
+    "tools": [
+        "hammer", "saw", "axe", "drill", "brush", "ruler", "scissors", "knife", "shovel", "bucket",
+        "ladder", "rope", "broom", "mop", "rake", "wrench", "nail", "screwdriver", "tape", "glue"
+    ],
+    "weather": [
+        "sun", "rain", "snow", "cloud", "wind", "storm", "rainbow", "tornado", "fog", "lightning",
+        "thunder", "hurricane", "hail", "hot", "cold", "ice", "frost", "breeze", "flood", "drought"
     ]
 }
