@@ -604,6 +604,24 @@ function handleMessage(data) {
             addChatMessage(`<span class="text-blue-600"><i class="fas fa-star"></i> Everyone has guessed the word: ${data.word}</span>`);
             startTransitionTimer(TRANSITION_TIME, data.serverTime);
             break;
+        case 'word_suggestion':
+            if (isHost) {
+                if (!pendingSuggestions.has(data.username)) {
+                    pendingSuggestions.set(data.username, new Set());
+                }
+                pendingSuggestions.get(data.username).add(data.word);
+                updatePendingSuggestions();
+                addChatMessage(`<span class="text-blue-600"><i class="fas fa-lightbulb"></i> ${data.username} suggested: ${data.word}</span>`);
+            }
+            break;
+            
+        case 'word_suggestion_response':
+            if (data.username === username) {
+                const icon = data.accepted ? 'check-circle' : 'times-circle';
+                const color = data.accepted ? 'green' : 'red';
+                addChatMessage(`<span class="text-${color}-600"><i class="fas fa-${icon}"></i> Host ${data.accepted ? 'accepted' : 'rejected'} your word: ${data.word}</span>`);
+            }
+            break;
     }
 }
 
@@ -1127,6 +1145,7 @@ function initializeLobby() {
     players.set(username, { ready: false, score: 0 });
     updatePlayerList();
     updateScoreDisplay();
+    initializeWordSuggestions();
 }
 
 function updateGameSettings() {
@@ -1603,4 +1622,91 @@ function getRandomWords(count = 3) {
     
     const shuffled = [...words].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
+}
+
+let pendingSuggestions = new Map();
+function initializeWordSuggestions() {
+    const suggestWordBtn = document.getElementById('suggestWordBtn');
+    const wordSuggestionInput = document.getElementById('wordSuggestionInput');
+    const pendingSuggestionsDiv = document.getElementById('pendingSuggestions');
+
+    if (!isHost) {
+        document.getElementById('customWords').parentElement.style.display = 'none';
+    } else {
+        document.getElementById('wordSuggestionInput').parentElement.style.display = 'none';
+    }
+
+    suggestWordBtn.onclick = () => {
+        const word = wordSuggestionInput.value.trim();
+        if (word && !isHost) {
+            sendData({
+                type: 'word_suggestion',
+                word: word,
+                username: username
+            });
+            wordSuggestionInput.value = '';
+            addChatMessage(`<span class="text-blue-600"><i class="fas fa-lightbulb"></i> You suggested the word: ${word}</span>`);
+        }
+    };
+
+    wordSuggestionInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            suggestWordBtn.click();
+        }
+    });
+}
+
+function updatePendingSuggestions() {
+    if (!isHost) return;
+
+    const pendingSuggestionsDiv = document.getElementById('pendingSuggestions');
+    pendingSuggestionsDiv.innerHTML = '';
+
+    pendingSuggestions.forEach((words, suggestingUser) => {
+        words.forEach(word => {
+            const suggestionDiv = document.createElement('div');
+            suggestionDiv.className = 'flex items-center justify-between p-2 hand-drawn bg-gray-50';
+            suggestionDiv.innerHTML = `
+                <span>${suggestingUser}: ${word}</span>
+                <div class="flex gap-2">
+                    <button class="hand-drawn-btn bg-green-400 p-1 hover:bg-green-500" onclick="handleSuggestionResponse('${suggestingUser}', '${word}', true)">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="hand-drawn-btn bg-red-400 p-1 hover:bg-red-500" onclick="handleSuggestionResponse('${suggestingUser}', '${word}', false)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            pendingSuggestionsDiv.appendChild(suggestionDiv);
+        });
+    });
+}
+
+function handleSuggestionResponse(suggestingUser, word, accepted) {
+    if (!isHost) return;
+
+    const userSuggestions = pendingSuggestions.get(suggestingUser);
+    if (userSuggestions) {
+        userSuggestions.delete(word);
+        if (userSuggestions.size === 0) {
+            pendingSuggestions.delete(suggestingUser);
+        }
+    }
+
+    if (accepted) {
+        const customWordsInput = document.getElementById('customWords');
+        const currentWords = customWordsInput.value.split(',').map(w => w.trim()).filter(w => w);
+        currentWords.push(word);
+        customWordsInput.value = currentWords.join(', ');
+        updateGameSettings();
+    }
+
+    sendData({
+        type: 'word_suggestion_response',
+        username: suggestingUser,
+        word: word,
+        accepted: accepted
+    });
+
+    updatePendingSuggestions();
 }

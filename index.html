@@ -153,6 +153,16 @@
                             <input type="text" id="customWords" placeholder="comma,separated,words"
                                    class="hand-drawn px-3 py-1 flex-1">
                         </div>
+                        <div id="wordSuggestions" class="mt-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <input type="text" id="wordSuggestionInput" placeholder="Suggest a word..."
+                                       class="hand-drawn px-3 py-1 flex-1">
+                                <button id="suggestWordBtn" class="hand-drawn-btn bg-blue-400 px-4 py-2 font-bold hover:bg-blue-500">
+                                    <i class="fas fa-lightbulb mr-2"></i>Suggest
+                                </button>
+                            </div>
+                            <div id="pendingSuggestions" class="space-y-2 mt-2"></div>
+                        </div>
                     </div>
                 </div>
             </div>
