@@ -3,7 +3,8 @@ let conn = null;
 let isHost = false;
 let isDrawer = false;
 let isDrawing = false;
-let words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
+let words = [];
+let wordsByCategory = {};
 let currentWord = null;
 let recentColors = ['#000000'];
 const maxRecentColors = 8;
@@ -866,7 +867,10 @@ function setupCanvas() {
     canvas.style.touchAction = 'none';
 }
 
-window.addEventListener('load', setupCanvas);
+window.addEventListener('load', async () => {
+    await loadWords();
+    setupCanvas();
+});
 
 let resizeTimeout;
 window.addEventListener('resize', () => {
@@ -1090,6 +1094,17 @@ let lastDisplayedTime = -1;
 
 let correctGuesses = new Set();
 let totalPossibleGuessers = 0;
+
+async function loadWords() {
+    try {
+        const response = await fetch('words.json');
+        wordsByCategory = await response.json();
+        words = Object.values(wordsByCategory).flat();
+    } catch (error) {
+        console.error('Error loading words:', error);
+        words = ['dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'book'];
+    }
+}
 
 function initializeLobby() {
     const lobbyPanel = document.getElementById('lobby-panel');
@@ -1574,6 +1589,18 @@ function showWordSelectionModal(wordChoices) {
 }
 
 function getRandomWords(count = 3) {
+    const categories = Object.keys(wordsByCategory);
+    if (categories.length > 0) {
+        const result = new Set();
+        while (result.size < count) {
+            const category = categories[Math.floor(Math.random() * categories.length)];
+            const categoryWords = wordsByCategory[category];
+            const word = categoryWords[Math.floor(Math.random() * categoryWords.length)];
+            result.add(word);
+        }
+        return Array.from(result);
+    }
+    
     const shuffled = [...words].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
 }
