@@ -64,6 +64,37 @@ brushSize.addEventListener('input', () => {
 
 colorPicker.addEventListener('change', () => updateRecentColors(colorPicker.value));
 
+const colorPalettes = {
+    basic: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+    nature: ['#2D5A27', '#8B4513', '#87CEEB', '#F0E68C', '#DEB887', '#556B2F', '#8FBC8F', '#DAA520'],
+    pastel: ['#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#FFB3F7', '#B3FFF7', '#FFC8BA', '#E8BAFF'],
+    vibrant: ['#FF355E', '#FD5B78', '#FF6037', '#FF9966', '#FFCC33', '#CCFF00', '#66FF66', '#AAF0D1']
+};
+
+let currentPalette = 'basic';
+
+document.getElementById('color-palette-select').addEventListener('change', (e) => {
+    currentPalette = e.target.value;
+    displayColorPalette();
+});
+
+function displayColorPalette() {
+    const paletteContainer = document.getElementById('color-palette');
+    paletteContainer.innerHTML = '';
+    
+    colorPalettes[currentPalette].forEach(color => {
+        const swatch = document.createElement('div');
+        swatch.className = 'w-8 h-8 hand-drawn cursor-pointer hover:scale-110 transition-transform';
+        swatch.style.backgroundColor = color;
+        swatch.title = color;
+        swatch.onclick = () => {
+            colorPicker.value = color;
+            updateRecentColors(color);
+        };
+        paletteContainer.appendChild(swatch);
+    });
+}
+
 function containsWord(message, word) {
     if (!word) return false;
     const messageWords = message.toLowerCase().split(/\W+/);
@@ -888,6 +919,7 @@ function setupCanvas() {
 window.addEventListener('load', async () => {
     await loadWords();
     setupCanvas();
+    displayColorPalette();
 });
 
 let resizeTimeout;
@@ -1206,7 +1238,8 @@ function updatePlayerList() {
         playerDiv.innerHTML = `
             <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}
                   ${data.isSpectator ? ' <i class="fas fa-eye text-blue-500" title="Spectator"></i>' : ''}</span>
-            <span>
+            <span class="flex items-center gap-4">
+                <span class="text-sm">${data.score} pts</span>
                 <i class="fas fa-${data.ready ? 'check text-green-600' : 'clock text-yellow-600'}"></i>
             </span>
         `;
