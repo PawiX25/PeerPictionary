@@ -1206,8 +1206,7 @@ function updatePlayerList() {
         playerDiv.innerHTML = `
             <span>${playerName}${isHost && playerName === username ? ' (Host)' : ''}
                   ${data.isSpectator ? ' <i class="fas fa-eye text-blue-500" title="Spectator"></i>' : ''}</span>
-            <span class="flex items-center gap-4">
-                <span class="text-sm">${data.score} pts</span>
+            <span>
                 <i class="fas fa-${data.ready ? 'check text-green-600' : 'clock text-yellow-600'}"></i>
             </span>
         `;
