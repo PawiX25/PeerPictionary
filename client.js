@@ -425,6 +425,7 @@ function handleMessage(data) {
             hasAnyoneGuessed = false;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             updateScoreDisplay();
+            updateDrawingControls();
             break;
         case 'fill':
             if (!isDrawer) {
@@ -549,6 +550,8 @@ function handleMessage(data) {
                 
                 updatePlayerList();
                 updateScoreDisplay();
+                isDrawer = currentDrawer === username;
+                updateDrawingControls();
             }
             break;
         case 'request_sync':
@@ -718,6 +721,7 @@ function nextRound() {
     totalPossibleGuessers = Array.from(players.entries())
         .filter(([name, data]) => !data.isSpectator && name !== currentDrawer)
         .length;
+    updateDrawingControls();
 }
 
 function getRandomWord() {
@@ -1272,6 +1276,7 @@ function startGame(isInitiator = true) {
         });
         nextRound();
     }
+    updateDrawingControls();
 }
 
 function updateScoreDisplay() {
@@ -1729,4 +1734,22 @@ function handleSuggestionResponse(suggestingUser, word, accepted) {
     });
 
     updatePendingSuggestions();
+}
+
+function updateDrawingControls() {
+    const drawingControls = document.getElementById('drawing-controls');
+    const canvasElement = document.getElementById('canvas');
+    
+    if (!isDrawer || isSpectator) {
+        drawingControls.classList.add('opacity-50', 'pointer-events-none');
+        canvasElement.classList.add('cursor-not-allowed');
+        canvasElement.classList.remove('cursor-crosshair');
+        
+        if (isFillMode) toggleFillMode();
+        if (isEraserMode) toggleEraserMode();
+    } else {
+        drawingControls.classList.remove('opacity-50', 'pointer-events-none');
+        canvasElement.classList.remove('cursor-not-allowed');
+        canvasElement.classList.add('cursor-crosshair');
+    }
 }
