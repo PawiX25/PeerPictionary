@@ -21,6 +21,7 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
   - Word selection system with 15-second timer
   - Auto-word selection if time runs out
   - Multiple word choices per round
+  - Word suggestions from players
 - **Game customization**
   - Adjustable rounds (1-10)
   - Custom drawing time (30-180 seconds)
