@@ -14,14 +14,11 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
   - Undo/Redo functionality
   - Canvas clearing
 - **Game mechanics**
-  - Points system (First guess: 100pts, Quick guess: 50pts, Normal guess: 25pts)
-  - Round-based gameplay
-  - Turn rotation among players
+  - Points system (First: 100pts, Quick: 50pts, Normal: 25pts)
+  - Round-based gameplay with turn rotation
   - Round timer with automatic progression
-  - Word selection system with 15-second timer
-  - Auto-word selection if time runs out
-  - Multiple word choices per round
-  - Word suggestions from players
+  - Word selection system
+  - Custom word suggestions from players
 - **Game customization**
   - Adjustable rounds (1-10)
   - Custom drawing time (30-180 seconds)
@@ -31,28 +28,12 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
   - In-game chat for guessing
   - Player ready system
   - Score tracking
-  - Player join/leave notifications
-  - Synchronized timers across all players
+  - Synchronized timers
 - **UI/UX**
-  - Hand-drawn aesthetic throughout
-  - Responsive design for all screen sizes
+  - Hand-drawn aesthetic
+  - Responsive design
   - Touch screen support
-  - Visual feedback for tool selection
-  - Tooltips for buttons
-  - Recent colors palette
-  - Game state synchronization
-  - Color-coded timers (normal/warning/danger)
-  - Player status indicators
-  - Drawing/Guessing role indicators
-  - Word selection modal
-  - Transition timers between rounds
-- **End-game features**
-  - Final scoreboard
-  - Winner announcement
-  - Play again option
-- **Spectator Mode**
-  - Join games as a spectator to watch ongoing rounds
-  - Automatically convert to a player in the next round
+  - Color-coded timers
 
 ## How to Play
 
@@ -62,7 +43,7 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
 4. Mark yourself as ready
 5. Take turns drawing and guessing!
 6. When drawing:
-   - Choose from 3 random words within 15 seconds
+   - Choose from 3 random words
    - Use drawing tools to illustrate the word
    - Cannot reveal word in chat
 7. When guessing:
@@ -71,29 +52,11 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
    - Quick guesses (within 10s) get 50 points
    - Regular guesses get 25 points
 
-## Technology Stack
-
-- PeerJS for P2P connections
-- TailwindCSS for styling
-- HTML5 Canvas for drawing
-- Pure JavaScript for game logic
-- Font Awesome for icons
-- Google Fonts for typography
-
 ## Quick Start
 
 1. Clone the repository
 2. Open `index.html` in your browser
 3. Share the game with friends!
-
-## Technical Details
-
-- Built with vanilla JavaScript (no framework dependencies)
-- Uses WebRTC through PeerJS for real-time communication
-- Implements flood fill algorithm for paint bucket tool
-- Canvas state management for undo/redo functionality
-- Responsive canvas scaling
-- Touch event handling for mobile support
 
 > **Note:** This game uses a trial TURN server with a 500MB monthly limit (renews Jan-31-2025).
 > If the limit is exceeded, peer-to-peer connectivity may be affected.
