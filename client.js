@@ -344,6 +344,17 @@ function handleMessage(data) {
         case 'drawing':
             if (!isDrawer) {
                 drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.size);
+                if (isHost && gameRecording.currentRound) {
+                    recordAction({
+                        type: 'draw',
+                        x0: data.x0,
+                        y0: data.y0,
+                        x1: data.x1,
+                        y1: data.y1,
+                        color: data.color,
+                        size: data.size
+                    });
+                }
                 if (isHost) {
                     sendData(data);
                 }
@@ -406,6 +417,18 @@ function handleMessage(data) {
             }
             break;
         case 'new_round':
+            if (gameRecording.currentRound) {
+                gameRecording.rounds.push(gameRecording.currentRound);
+            }
+            
+            gameRecording.currentRound = {
+                roundNumber: data.roundNumber,
+                drawer: data.drawer,
+                word: null,
+                startTime: Date.now(),
+                actions: []
+            };
+            
             if (isSpectator) {
                 isSpectator = false;
                 const player = players.get(username);
@@ -451,6 +474,12 @@ function handleMessage(data) {
         case 'clear_canvas':
             if (!isDrawer) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (isHost && gameRecording.currentRound) {
+                    recordAction({
+                        type: 'clear'
+                    });
+                }
                 if (isHost) {
                     sendData(data);
                 }
@@ -516,6 +545,7 @@ function handleMessage(data) {
                 currentWord = data.currentWord;
                 roundNumber = data.roundNumber;
                 gamePhase = data.gamePhase;
+                gameRecording.expectedTotalRounds = data.expectedTotalRounds; 
                 
                 if (data.gameInProgress) {
                     document.getElementById('lobby-panel').classList.add('hidden');
@@ -563,6 +593,9 @@ function handleMessage(data) {
             }
             break;
         case 'game_end':
+            if (gameRecording.currentRound) {
+                gameRecording.rounds.push(gameRecording.currentRound);
+            }
             displayGameEnd(data.winner, data.finalScores);
             break;
         case 'time_up':
@@ -597,6 +630,10 @@ function handleMessage(data) {
             if (!isDrawer) {
                 currentWord = data.word;
                 wordDisplay.textContent = 'Guess the word!';
+                
+                if (gameRecording.currentRound) {
+                    gameRecording.currentRound.word = data.word;
+                }
             }
             const serverTime = data.serverTime;
             clearTimers();
@@ -642,6 +679,11 @@ function handleMessage(data) {
                 const icon = data.accepted ? 'check-circle' : 'times-circle';
                 const color = data.accepted ? 'green' : 'red';
                 addChatMessage(`<span class="text-${color}-600"><i class="fas fa-${icon}"></i> Host ${data.accepted ? 'accepted' : 'rejected'} your word: ${data.word}</span>`);
+            }
+            break;
+        case 'sync_recording':
+            if (!isHost) {
+                gameRecording = data.recording;
             }
             break;
     }
@@ -722,6 +764,27 @@ function nextRound() {
         .filter(([name, data]) => !data.isSpectator && name !== currentDrawer)
         .length;
     updateDrawingControls();
+    
+    if (gameRecording.currentRound) {
+        gameRecording.rounds.push(gameRecording.currentRound);
+    }
+    
+    gameRecording.currentRound = {
+        roundNumber: roundNumber,
+        globalRoundNumber: ++gameRecording.totalRounds,
+        drawer: currentDrawer,
+        word: null,
+        startTime: Date.now(),
+        actions: []
+    };
+    
+    
+    if (isHost) {
+        sendData({
+            type: 'sync_recording',
+            recording: gameRecording
+        });
+    }
 }
 
 function getRandomWord() {
@@ -790,6 +853,17 @@ function draw(e) {
     
     if (!isUndoRedoing) {
         currentPath.push({
+            x0: ctx.lastX,
+            y0: ctx.lastY,
+            x1: point.x,
+            y1: point.y,
+            color: currentColor,
+            size: currentSize
+        });
+        
+        
+        recordAction({
+            type: 'draw',
             x0: ctx.lastX,
             y0: ctx.lastY,
             x1: point.x,
@@ -936,14 +1010,62 @@ window.addEventListener('resize', () => {
     }, 250);
 });
 
-function drawLine(x0, y0, x1, y1, color = '#000000', size = 2) {
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = size;
-    ctx.lineCap = 'round';
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
+
+function drawLine(x0, y0, x1, y1, color = '#000000', size = 2, context = ctx) {
+    context.beginPath();
+    context.strokeStyle = color;
+    context.lineWidth = size;
+    context.lineCap = 'round';
+    context.moveTo(x0, y0);
+    context.lineTo(x1, y1);
+    context.stroke();
+}
+
+
+function floodFill(startX, startY, fillColor, context = ctx) {
+    const imageData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
+    const pixels = imageData.data;
+    
+    const startPos = (startY * context.canvas.width + startX) * 4;
+    const startR = pixels[startPos];
+    const startG = pixels[startPos + 1];
+    const startB = pixels[startPos + 2];
+    const startA = pixels[startPos + 3];
+    
+    if (colorMatch(fillColor, [startR, startG, startB, startA])) return;
+    
+    const fillR = parseInt(fillColor.substr(1,2), 16);
+    const fillG = parseInt(fillColor.substr(3,2), 16);
+    const fillB = parseInt(fillColor.substr(5,2), 16);
+    
+    const stack = [[startX, startY]];
+    
+    while (stack.length) {
+        const [x, y] = stack.pop();
+        const pos = (y * context.canvas.width + x) * 4;
+        
+        if (x < 0 || x >= context.canvas.width || y < 0 || y >= context.canvas.height) continue;
+        if (!colorMatch([pixels[pos], pixels[pos + 1], pixels[pos + 2], pixels[pos + 3]], 
+                       [startR, startG, startB, startA])) continue;
+        
+        pixels[pos] = fillR;
+        pixels[pos + 1] = fillG;
+        pixels[pos + 2] = fillB;
+        pixels[pos + 3] = 255;
+        
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    
+    context.putImageData(imageData, 0, 0);
+    
+    if (isDrawer || (isHost && context === ctx)) {
+        recordAction({
+            type: 'fill',
+            x: startX,
+            y: startY,
+            color: fillColor
+        });
+    }
 }
 
 function undo() {
@@ -990,6 +1112,11 @@ function addChatMessage(message) {
     chat.scrollTop = chat.scrollHeight;
     
     div.style.animation = 'fadeIn 0.3s ease-in';
+    
+    recordAction({
+        type: 'chat',
+        message: message
+    });
 }
 
 function updateRecentColors(color) {
@@ -1046,6 +1173,11 @@ function clearCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     undoStack = [];
     redoStack = [];
+    
+    recordAction({
+        type: 'clear'
+    });
+    
     sendData({ type: 'clear_canvas' });
 }
 
@@ -1084,6 +1216,15 @@ function floodFill(startX, startY, fillColor) {
     }
     
     ctx.putImageData(imageData, 0, 0);
+    
+    if (isDrawer) {
+        recordAction({
+            type: 'fill',
+            x: startX,
+            y: startY,
+            color: fillColor
+        });
+    }
 }
 
 function colorMatch(c1, c2) {
@@ -1262,7 +1403,10 @@ function startGame(isInitiator = true) {
     
     if (isHost) {
         currentDrawer = Array.from(players.keys())[0];
-        roundNumber = 1;
+        roundNumber = 0; 
+        gameRecording.expectedTotalRounds = players.size * gameSettings.rounds;
+        gameRecording.totalRounds = 0; 
+        
         sendData({
             type: 'game_state',
             players: Array.from(players.entries()),
@@ -1272,7 +1416,8 @@ function startGame(isInitiator = true) {
             roundNumber: roundNumber,
             gameInProgress: true,
             gamePhase: 'starting',
-            serverTime: Date.now()
+            serverTime: Date.now(),
+            expectedTotalRounds: gameRecording.expectedTotalRounds 
         });
         nextRound();
     }
@@ -1318,6 +1463,18 @@ function endGame() {
         timerDisplay.remove();
         timerDisplay = null;
     }
+
+    
+    if (gameRecording.currentRound && 
+        gameRecording.currentRound.roundNumber <= gameRecording.expectedTotalRounds &&
+        !gameRecording.rounds.some(r => r.globalRoundNumber === gameRecording.currentRound.globalRoundNumber)) {
+        gameRecording.rounds.push(gameRecording.currentRound);
+    }
+    gameRecording.currentRound = null;
+
+    
+    gameRecording.rounds.sort((a, b) => a.globalRoundNumber - b.globalRoundNumber);
+
     if (!isHost) return;
     
     const sortedPlayers = Array.from(players.entries())
@@ -1341,13 +1498,9 @@ function displayGameEnd(winner, finalScores) {
     }
 
     const container = document.getElementById('container');
-    const lobbyPanel = document.getElementById('lobby-panel');
-    
-    lobbyPanel.classList.add('hidden');
-    
     container.innerHTML = `
-        <div class="bg-white p-8 hand-drawn text-center">
-            <h2 class="text-3xl font-bold mb-6">
+        <div class="bg-white p-6 hand-drawn max-w-md mx-auto">
+            <h2 class="text-2xl font-bold mb-4 text-center">
                 <i class="fas fa-crown text-yellow-500"></i>
                 ${winner === username ? 'You won!' : `${winner} wins!`}
             </h2>
@@ -1366,6 +1519,13 @@ function displayGameEnd(winner, finalScores) {
             </button>
         </div>
     `;
+    
+    if (gameRecording.currentRound) {
+        gameRecording.rounds.push(gameRecording.currentRound);
+    }
+    
+    const replayViewer = createReplayViewer(gameRecording);
+    container.appendChild(replayViewer);
 }
 
 function startRoundTimer(duration, serverTime = Date.now()) {
@@ -1608,10 +1768,16 @@ function showWordSelectionModal(wordChoices) {
         wordDisplay.textContent = `Draw: ${word}`;
         const serverTime = Date.now();
         
+        
+        if (gameRecording.currentRound) {
+            gameRecording.currentRound.word = word;
+        }
+        
         sendData({
             type: 'word_selected',
             word: word,
-            serverTime: serverTime
+            serverTime: serverTime,
+            roundData: gameRecording.currentRound 
         });
         
         clearTimers();
@@ -1752,4 +1918,458 @@ function updateDrawingControls() {
         canvasElement.classList.remove('cursor-not-allowed');
         canvasElement.classList.add('cursor-crosshair');
     }
+}
+
+
+let gameRecording = {
+    rounds: [],
+    currentRound: null,
+    totalRounds: 0,
+    expectedTotalRounds: 0 
+};
+
+function recordAction(action) {
+    if (!gameRecording.currentRound) return;
+    
+    action.timestamp = Date.now() - gameRecording.currentRound.startTime;
+    gameRecording.currentRound.actions.push(action);
+}
+
+
+function nextRound() {
+    if (!isHost) return;
+    
+    const spectatorsToConvert = [];
+    players.forEach((data, playerName) => {
+        if (data.isSpectator) {
+            data.isSpectator = false;
+            spectatorsToConvert.push(playerName);
+        }
+    });
+    
+    spectatorsToConvert.forEach(playerName => {
+        sendData({
+            type: 'spectator_converted',
+            username: playerName
+        });
+    });
+    
+    roundInProgress = true;
+    const playerArray = Array.from(players.keys());
+    const currentIndex = playerArray.indexOf(currentDrawer);
+    const nextIndex = (currentIndex + 1) % playerArray.length;
+    currentDrawer = playerArray[nextIndex];
+    
+    roundNumber++;
+    
+    
+    if (roundNumber > gameRecording.expectedTotalRounds) {
+        endGame();
+        return;
+    }
+    
+    sendData({
+        type: 'new_round',
+        drawer: currentDrawer,
+        roundNumber: roundNumber
+    });
+    
+    isDrawer = currentDrawer === username;
+    if (isDrawer) {
+        showWordSelectionModal(getRandomWords(3));
+    } else {
+        wordDisplay.textContent = 'Guess the word!';
+    }
+    
+    updateScoreDisplay();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    correctGuesses = new Set();
+    totalPossibleGuessers = Array.from(players.entries())
+        .filter(([name, data]) => !data.isSpectator && name !== currentDrawer)
+        .length;
+    updateDrawingControls();
+    
+    
+    if (gameRecording.currentRound && 
+        !gameRecording.rounds.some(r => r.globalRoundNumber === gameRecording.currentRound.globalRoundNumber)) {
+        gameRecording.rounds.push(gameRecording.currentRound);
+    }
+    
+    gameRecording.currentRound = {
+        roundNumber: roundNumber,
+        globalRoundNumber: roundNumber,
+        drawer: currentDrawer,
+        word: null,
+        startTime: Date.now(),
+        actions: []
+    };
+    
+    
+    if (isHost) {
+        sendData({
+            type: 'sync_recording',
+            recording: gameRecording
+        });
+    }
+}
+
+function draw(e) {
+    if (!isDrawing || !isDrawer) return;
+    
+    const point = getCanvasPoint(e);
+    const currentColor = isEraserMode ? '#FFFFFF' : colorPicker.value;
+    const currentSize = isEraserMode ? parseInt(brushSize.value) * 2 : brushSize.value;
+    
+    if (!isUndoRedoing) {
+        currentPath.push({
+            x0: ctx.lastX,
+            y0: ctx.lastY,
+            x1: point.x,
+            y1: point.y,
+            color: currentColor,
+            size: currentSize
+        });
+    }
+    
+    drawLine(ctx.lastX, ctx.lastY, point.x, point.y, currentColor, currentSize);
+    
+    if (!isUndoRedoing) {
+        sendData({
+            type: 'drawing',
+            x0: ctx.lastX,
+            y0: ctx.lastY,
+            x1: point.x,
+            y1: point.y,
+            color: currentColor,
+            size: currentSize
+        });
+        
+        if (isDrawer && !isUndoRedoing) {
+            recordAction({
+                type: 'draw',
+                x0: ctx.lastX,
+                y0: ctx.lastY,
+                x1: point.x,
+                y1: point.y,
+                color: currentColor,
+                size: currentSize
+            });
+        }
+    }
+    
+    ctx.lastX = point.x;
+    ctx.lastY = point.y;
+}
+
+function floodFill(startX, startY, fillColor) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    
+    const startPos = (startY * canvas.width + startX) * 4;
+    const startR = pixels[startPos];
+    const startG = pixels[startPos + 1];
+    const startB = pixels[startPos + 2];
+    const startA = pixels[startPos + 3];
+    
+    if (colorMatch(fillColor, [startR, startG, startB, startA])) return;
+    
+    const fillR = parseInt(fillColor.substr(1,2), 16);
+    const fillG = parseInt(fillColor.substr(3,2), 16);
+    const fillB = parseInt(fillColor.substr(5,2), 16);
+    
+    const stack = [[startX, startY]];
+    
+    while (stack.length) {
+        const [x, y] = stack.pop();
+        const pos = (y * canvas.width + x) * 4;
+        
+        if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
+        if (!colorMatch([pixels[pos], pixels[pos + 1], pixels[pos + 2], pixels[pos + 3]], 
+                       [startR, startG, startB, startA])) continue;
+        
+        pixels[pos] = fillR;
+        pixels[pos + 1] = fillG;
+        pixels[pos + 2] = fillB;
+        pixels[pos + 3] = 255;
+        
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    if (isDrawer) {
+        recordAction({
+            type: 'fill',
+            x: startX,
+            y: startY,
+            color: fillColor
+        });
+    }
+}
+
+function addChatMessage(message) {
+    const div = document.createElement('div');
+    div.innerHTML = message;
+    div.className = 'mb-2 p-2 hand-drawn bg-gray-50';
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    
+    div.style.animation = 'fadeIn 0.3s ease-in';
+    
+    recordAction({
+        type: 'chat',
+        message: message
+    });
+}
+
+
+function createReplayViewer(recording) {
+    const replayContainer = document.createElement('div');
+    replayContainer.className = 'bg-white p-6 hand-drawn';
+    replayContainer.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold">
+                <i class="fas fa-film text-purple-600"></i> Game Replay
+            </h3>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label class="font-bold">Speed:</label>
+                    <select id="replaySpeed" class="hand-drawn px-2 py-1">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="4">4x</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button id="replayPrevRound" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button id="replayPlayPause" class="hand-drawn-btn bg-green-400 p-2 hover:bg-green-500">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button id="replayNextRound" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="relative w-full h-2 mb-4 hand-drawn bg-gray-200">
+            <div id="replayProgress" class="absolute left-0 top-0 h-full bg-purple-500" style="width: 0%"></div>
+        </div>
+        <div class="flex gap-8">
+            <div class="flex-1">
+                <canvas id="replayCanvas" width="800" height="400" class="bg-white w-full hand-drawn"></canvas>
+                <div id="replayInfo" class="mt-2 text-center font-bold text-purple-600"></div>
+            </div>
+            <div class="w-64">
+                <div id="replayChat" class="bg-white p-4 hand-drawn h-[400px] overflow-y-auto"></div>
+            </div>
+        </div>
+    `;
+
+    let currentRoundIndex = 0;
+    let isPlaying = false;
+    let playbackSpeed = 1;
+    let startTime = 0;
+    let currentTime = 0;
+    const replayCtx = replayContainer.querySelector('#replayCanvas').getContext('2d');
+    const replayChat = replayContainer.querySelector('#replayChat');
+    const infoDisplay = replayContainer.querySelector('#replayInfo');
+
+    function executeReplayAction(action, ctx, chat) {
+        switch (action.type) {
+            case 'draw':
+                drawLine(action.x0, action.y0, action.x1, action.y1, action.color, action.size, ctx);
+                break;
+            case 'fill':
+                floodFill(action.x, action.y, action.color, ctx);
+                break;
+            case 'clear':
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                break;
+            case 'chat':
+                const div = document.createElement('div');
+                div.innerHTML = action.message;
+                div.className = 'mb-2 p-2 hand-drawn bg-gray-50';
+                chat.appendChild(div);
+                chat.scrollTop = chat.scrollHeight;
+                break;
+        }
+    }
+
+    function displayRoundInfo() {
+        const round = recording.rounds[currentRoundIndex];
+        if (!round) return;
+        
+        const totalRounds = recording.expectedTotalRounds || recording.rounds.length;
+        const drawerInfo = `${round.drawer} drawing "${round.word || '?'}"`;
+        infoDisplay.innerHTML = `
+            <div class="text-lg">Round ${round.roundNumber}/${totalRounds}</div>
+            <div class="text-sm text-gray-600">${drawerInfo}</div>
+        `;
+    }
+    
+    replayContainer.querySelector('#replayPrevRound').title = 'Previous Round';
+    replayContainer.querySelector('#replayNextRound').title = 'Next Round';
+    
+    function updateNavigationButtons() {
+        const prevBtn = replayContainer.querySelector('#replayPrevRound');
+        const nextBtn = replayContainer.querySelector('#replayNextRound');
+        
+        prevBtn.disabled = currentRoundIndex === 0;
+        nextBtn.disabled = currentRoundIndex === recording.rounds.length - 1;
+        
+        prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+        nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+    }
+    
+    function playRound() {
+        const round = recording.rounds[currentRoundIndex];
+        if (!round || !round.actions || round.actions.length === 0) {
+            console.warn('No actions to replay for this round');
+            return;
+        }
+
+        replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
+        replayChat.innerHTML = '';
+        
+        let lastActionIndex = 0;
+        if (!startTime) startTime = performance.now() - (currentTime / playbackSpeed);
+
+        const progressBar = replayContainer.querySelector('#replayProgress');
+        const totalDuration = round.actions[round.actions.length - 1].timestamp;
+
+        function animate(timestamp) {
+            currentTime = (timestamp - startTime) * playbackSpeed;
+            
+            const progress = Math.min((currentTime / totalDuration) * 100, 100);
+            progressBar.style.width = `${progress}%`;
+            
+            while (lastActionIndex < round.actions.length && 
+                   round.actions[lastActionIndex].timestamp <= currentTime) {
+                const action = round.actions[lastActionIndex];
+                executeReplayAction(action, replayCtx, replayChat);
+                lastActionIndex++;
+            }
+            
+            if (lastActionIndex < round.actions.length && isPlaying) {
+                requestAnimationFrame(animate);
+            } else {
+                isPlaying = false;
+                updatePlayPauseButton();
+            }
+        }
+        
+        if (isPlaying) {
+            requestAnimationFrame(animate);
+        }
+    }
+
+    const progressContainer = replayContainer.querySelector('.hand-drawn.bg-gray-200');
+    progressContainer.addEventListener('click', (e) => {
+        const round = recording.rounds[currentRoundIndex];
+        if (!round || !round.actions || round.actions.length === 0) return;
+
+        const rect = progressContainer.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const percentage = clickX / rect.width;
+        const totalDuration = round.actions[round.actions.length - 1].timestamp;
+        
+        currentTime = totalDuration * percentage;
+        startTime = performance.now() - (currentTime / playbackSpeed);
+        
+        replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
+        replayChat.innerHTML = '';
+        
+        for (const action of round.actions) {
+            if (action.timestamp <= currentTime) {
+                executeReplayAction(action, replayCtx, replayChat);
+            }
+        }
+        
+        if (!isPlaying) {
+            isPlaying = true;
+            updatePlayPauseButton();
+            playRound();
+        }
+    });
+
+    function updatePlayPauseButton() {
+        const btn = replayContainer.querySelector('#replayPlayPause');
+        btn.innerHTML = `<i class="fas fa-${isPlaying ? 'pause' : 'play'}"></i>`;
+        btn.classList.toggle('bg-green-400', !isPlaying);
+        btn.classList.toggle('bg-yellow-400', isPlaying);
+    }
+    
+    replayContainer.querySelector('#replayPlayPause').onclick = () => {
+        isPlaying = !isPlaying;
+        if (isPlaying) {
+            startTime = 0;
+            playRound();
+        }
+        updatePlayPauseButton();
+    };
+    
+    replayContainer.querySelector('#replayPrevRound').onclick = () => {
+        if (currentRoundIndex > 0) {
+            isPlaying = false;
+            currentRoundIndex--;
+            startTime = 0;
+            currentTime = 0;
+            displayRoundInfo();
+            updateNavigationButtons();
+            
+            replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
+            replayChat.innerHTML = '';
+            
+            isPlaying = true;
+            updatePlayPauseButton();
+            playRound();
+        }
+    };
+    
+    replayContainer.querySelector('#replayNextRound').onclick = () => {
+        if (currentRoundIndex < recording.rounds.length - 1) {
+            isPlaying = false;
+            currentRoundIndex++;
+            startTime = 0;
+            currentTime = 0;
+            displayRoundInfo();
+            updateNavigationButtons();
+            
+            replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
+            replayChat.innerHTML = '';
+            
+            isPlaying = true;
+            updatePlayPauseButton();
+            playRound();
+        }
+    };
+    
+    replayContainer.querySelector('#replaySpeed').onchange = (e) => {
+        playbackSpeed = parseFloat(e.target.value);
+        if (isPlaying) {
+            startTime = 0;
+            playRound();
+        }
+    };
+    
+    isPlaying = true;
+    updatePlayPauseButton();
+    playRound();
+    
+    displayRoundInfo();
+    updateNavigationButtons();
+    
+    isPlaying = true;
+    updatePlayPauseButton();
+    if (recording.rounds.length > 0) {
+        playRound();
+    } else {
+        infoDisplay.innerHTML = '<div class="text-lg text-gray-500">No rounds to replay</div>';
+    }
+    
+    return replayContainer;
 }
