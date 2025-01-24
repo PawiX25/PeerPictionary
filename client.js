@@ -596,6 +596,9 @@ function handleMessage(data) {
             if (gameRecording.currentRound) {
                 gameRecording.rounds.push(gameRecording.currentRound);
             }
+            if (data.recording) {
+                gameRecording = data.recording;
+            }
             displayGameEnd(data.winner, data.finalScores);
             break;
         case 'time_up':
@@ -1471,10 +1474,9 @@ function endGame() {
         gameRecording.currentRound.roundNumber <= gameRecording.expectedTotalRounds &&
         !gameRecording.rounds.some(r => r.globalRoundNumber === gameRecording.currentRound.globalRoundNumber)) {
         gameRecording.rounds.push(gameRecording.currentRound);
+        gameRecording.currentRound = null;
     }
-    gameRecording.currentRound = null;
 
-    
     gameRecording.rounds.sort((a, b) => a.globalRoundNumber - b.globalRoundNumber);
 
     if (!isHost) return;
@@ -1487,7 +1489,8 @@ function endGame() {
     sendData({
         type: 'game_end',
         winner: winner[0],
-        finalScores: sortedPlayers
+        finalScores: sortedPlayers,
+        recording: gameRecording
     });
     
     displayGameEnd(winner[0], sortedPlayers);
