@@ -635,6 +635,9 @@ function handleMessage(data) {
                     gameRecording.currentRound.word = data.word;
                 }
             }
+            roundStartTime = data.serverTime;
+            hasAnyoneGuessed = false;
+            
             const serverTime = data.serverTime;
             clearTimers();
             startRoundTimer(gameSettings.drawTime, serverTime);
@@ -736,7 +739,6 @@ function nextRound() {
     
     roundNumber++;
     hasAnyoneGuessed = false;
-    roundStartTime = Date.now();
     
     if (roundNumber > gameSettings.rounds * playerArray.length) {
         endGame();
@@ -1664,13 +1666,16 @@ function endCurrentRound(reason, data = {}) {
         const { username, guesser } = data;
         if (guesser && !correctGuesses.has(username)) {
             correctGuesses.add(username);
-            if (!hasAnyoneGuessed) {
+            
+            if (correctGuesses.size === 1) {
                 guesser.score += POINTS.FIRST_GUESS;
-                hasAnyoneGuessed = true;
-            } else if ((Date.now() - roundStartTime) / 1000 < 10) {
-                guesser.score += POINTS.QUICK_GUESS;
             } else {
-                guesser.score += POINTS.NORMAL_GUESS;
+                const guessTime = (Date.now() - roundStartTime) / 1000;
+                if (guessTime < 10) {
+                    guesser.score += POINTS.QUICK_GUESS;
+                } else {
+                    guesser.score += POINTS.NORMAL_GUESS;
+                }
             }
             updateScoreDisplay();
         }
@@ -1768,6 +1773,8 @@ function showWordSelectionModal(wordChoices) {
         wordDisplay.textContent = `Draw: ${word}`;
         const serverTime = Date.now();
         
+        roundStartTime = serverTime;
+        hasAnyoneGuessed = false;
         
         if (gameRecording.currentRound) {
             gameRecording.currentRound.word = word;
