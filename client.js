@@ -453,6 +453,14 @@ function handleMessage(data) {
         case 'fill':
             if (!isDrawer) {
                 floodFill(data.x, data.y, data.color);
+                if (isHost && gameRecording.currentRound) {
+                    recordAction({
+                        type: 'fill',
+                        x: data.x,
+                        y: data.y,
+                        color: data.color
+                    });
+                }
                 if (isHost) {
                     sendData(data);
                 }
@@ -832,12 +840,17 @@ function startDrawing(e) {
             color: colorPicker.value
         });
         redoStack = [];
-        sendData({
+        const fillData = {
             type: 'fill',
             x: Math.floor(point.x),
             y: Math.floor(point.y),
             color: colorPicker.value
-        });
+        };
+        sendData(fillData);
+        
+        if (isHost && gameRecording.currentRound) {
+            recordAction(fillData);
+        }
         return;
     }
     
@@ -884,7 +897,7 @@ function draw(e) {
         sendData({
             type: 'drawing',
             x0: ctx.lastX,
-            y0: ctx.lastY,
+            y0: point.x,
             x1: point.x,
             y1: point.y,
             color: currentColor,
@@ -1030,38 +1043,75 @@ function drawLine(x0, y0, x1, y1, color = '#000000', size = 2, context = ctx) {
 function floodFill(startX, startY, fillColor, context = ctx) {
     const imageData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
     const pixels = imageData.data;
-    
-    const startPos = (startY * context.canvas.width + startX) * 4;
+    const width = context.canvas.width;
+    const height = context.canvas.height;
+
+    const startPos = (startY * width + startX) * 4;
     const startR = pixels[startPos];
     const startG = pixels[startPos + 1];
     const startB = pixels[startPos + 2];
     const startA = pixels[startPos + 3];
-    
-    if (colorMatch(fillColor, [startR, startG, startB, startA])) return;
-    
-    const fillR = parseInt(fillColor.substr(1,2), 16);
-    const fillG = parseInt(fillColor.substr(3,2), 16);
-    const fillB = parseInt(fillColor.substr(5,2), 16);
-    
-    const stack = [[startX, startY]];
-    
-    while (stack.length) {
-        const [x, y] = stack.pop();
-        const pos = (y * context.canvas.width + x) * 4;
-        
-        if (x < 0 || x >= context.canvas.width || y < 0 || y >= context.canvas.height) continue;
-        if (!colorMatch([pixels[pos], pixels[pos + 1], pixels[pos + 2], pixels[pos + 3]], 
-                       [startR, startG, startB, startA])) continue;
-        
-        pixels[pos] = fillR;
-        pixels[pos + 1] = fillG;
-        pixels[pos + 2] = fillB;
-        pixels[pos + 3] = 255;
-        
-        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+
+    const fillRgba = hexToRgba(fillColor);
+
+    if (colorMatch([startR, startG, startB, startA], fillRgba)) {
+        return;
     }
-    
+
+    const stack = [];
+    stack.push({ x: startX, y: startY });
+
+    while (stack.length > 0) {
+        const { x, y } = stack.pop();
+
+        let leftX = x;
+        while (leftX >= 0 && isOriginalColor(leftX, y, startR, startG, startB, startA)) {
+            leftX--;
+        }
+        leftX++;
+
+        let rightX = x;
+        while (rightX < width && isOriginalColor(rightX, y, startR, startG, startB, startA)) {
+            rightX++;
+        }
+        rightX--;
+
+        for (let currX = leftX; currX <= rightX; currX++) {
+            setColor(currX, y, fillRgba);
+        }
+
+        for (let dy = -1; dy <= 1; dy += 2) {
+            const newY = y + dy;
+            if (newY < 0 || newY >= height) continue;
+
+            let added = false;
+            for (let currX = leftX; currX <= rightX; currX++) {
+                if (isOriginalColor(currX, newY, startR, startG, startB, startA)) {
+                    if (!added) {
+                        stack.push({ x: currX, y: newY });
+                        added = true;
+                    }
+                } else {
+                    added = false;
+                }
+            }
+        }
+    }
+
     context.putImageData(imageData, 0, 0);
+
+    function isOriginalColor(x, y, r, g, b, a) {
+        const pos = (y * width + x) * 4;
+        return colorMatch([pixels[pos], pixels[pos + 1], pixels[pos + 2], pixels[pos + 3]], [r, g, b, a]);
+    }
+
+    function setColor(x, y, [r, g, b]) {
+        const pos = (y * width + x) * 4;
+        pixels[pos] = r;
+        pixels[pos + 1] = g;
+        pixels[pos + 2] = b;
+        pixels[pos + 3] = 255;
+    }
     
     if (isDrawer || (isHost && context === ctx)) {
         recordAction({
@@ -1071,6 +1121,13 @@ function floodFill(startX, startY, fillColor, context = ctx) {
             color: fillColor
         });
     }
+}
+
+function hexToRgba(hex) {
+    const r = parseInt(hex.substr(1, 2), 16);
+    const g = parseInt(hex.substr(3, 2), 16);
+    const b = parseInt(hex.substr(5, 2), 16);
+    return [r, g, b];
 }
 
 function undo() {
@@ -2194,7 +2251,45 @@ function createReplayViewer(recording) {
                 drawLine(action.x0, action.y0, action.x1, action.y1, action.color, action.size, ctx);
                 break;
             case 'fill':
-                floodFill(action.x, action.y, action.color, ctx);
+                const [r, g, b] = hexToRgba(action.color);
+                const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+                const pixels = imageData.data;
+                
+                const getColor = (x, y) => {
+                    const i = (y * ctx.canvas.width + x) * 4;
+                    return [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
+                };
+                
+                const setColor = (x, y) => {
+                    const i = (y * ctx.canvas.width + x) * 4;
+                    pixels[i] = r;
+                    pixels[i + 1] = g;
+                    pixels[i + 2] = b;
+                    pixels[i + 3] = 255;
+                };
+                
+                const targetColor = getColor(action.x, action.y);
+                const stack = [[action.x, action.y]];
+                const seen = new Set();
+                const key = (x, y) => `${x},${y}`;
+                
+                while (stack.length) {
+                    const [x, y] = stack.pop();
+                    if (x < 0 || x >= ctx.canvas.width || y < 0 || y >= ctx.canvas.height) continue;
+                    
+                    const k = key(x, y);
+                    if (seen.has(k)) continue;
+                    seen.add(k);
+                    
+                    const currentColor = getColor(x, y);
+                    if (!colorMatch(currentColor, targetColor)) continue;
+                    
+                    setColor(x, y);
+                    
+                    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
                 break;
             case 'clear':
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
