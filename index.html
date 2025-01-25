@@ -22,17 +22,21 @@
         .hand-drawn {
             border: 3px solid #000;
             border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
         }
         .hand-drawn-btn {
             border: 2px solid #000;
             border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
             transition: all 0.3s ease;
+            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
         }
         .hand-drawn-btn:hover {
             transform: scale(1.05) rotate(-1deg);
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
         }
         #canvas {
             border-radius: 255px 15px 225px 15px/15px 15px 225px 15px 255px;
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
         }
         .wiggle {
             animation: wiggle 1s ease-in-out infinite;
@@ -119,12 +123,13 @@
             border-radius: 50%;
             margin-top: -8px;
             cursor: pointer;
-            box-shadow: 2px 2px 0px #000;
+            box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
             transition: all 0.2s ease;
         }
 
         input[type="range"]::-webkit-slider-thumb:hover {
             transform: scale(1.1);
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
         }
 
         input[type="range"]::-moz-range-track {
@@ -142,12 +147,13 @@
             border-radius: 50%;
             margin-top: -8px;
             cursor: pointer;
-            box-shadow: 2px 2px 0px #000;
+            box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
             transition: all 0.2s ease;
         }
 
         input[type="range"]::-moz-range-thumb:hover {
             transform: scale(1.1);
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
         }
 
         input[type="range"]:focus {
