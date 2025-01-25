@@ -257,40 +257,75 @@
             <div class="flex-1">
                 <canvas id="canvas" width="800" height="400" class="bg-white w-full hand-drawn"></canvas>
                 <div id="drawing-controls" class="mt-4 bg-white p-4 hand-drawn">
-                    <div class="flex flex-wrap gap-4 mb-2 pb-2 border-b-2 border-gray-200 border-dashed">
+                    <div class="flex flex-wrap gap-6 mb-2 pb-2 border-b-2 border-gray-200 border-dashed">
                         <div class="flex items-center gap-4 p-2 hand-drawn bg-gray-50">
-                            <input type="color" id="colorPicker" value="#000000" 
-                                   class="hand-drawn w-10 h-10">
+                            <div class="relative group">
+                                <input type="color" id="colorPicker" value="#000000" 
+                                       class="hand-drawn w-10 h-10 cursor-pointer">
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Color Picker
+                                </span>
+                            </div>
                             <div id="color-palette" class="flex gap-1 flex-wrap"></div>
                         </div>
 
                         <div class="flex items-center gap-3 p-2 hand-drawn bg-gray-50">
                             <div class="flex items-center gap-2">
-                                <label for="brushSize" class="font-bold whitespace-nowrap">
-                                    <i class="fas fa-paint-brush"></i>
-                                </label>
+                                <div class="relative group">
+                                    <label for="brushSize" class="font-bold whitespace-nowrap">
+                                        <i class="fas fa-paint-brush"></i>
+                                    </label>
+                                    <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                        Brush Size
+                                    </span>
+                                </div>
                                 <input type="range" id="brushSize" min="1" max="20" value="2" 
                                        class="w-24">
                                 <span id="brushSizeValue" class="font-bold w-4">2</span>
                             </div>
-                            <button id="eraserBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500" title="Eraser">
-                                <i class="fas fa-eraser"></i>
-                            </button>
+                            <div class="relative group">
+                                <button id="eraserBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Eraser Tool (Toggle)
+                                </span>
+                            </div>
                         </div>
 
                         <div class="flex items-center gap-2 p-2 hand-drawn bg-gray-50">
-                            <button id="fillBtn" class="hand-drawn-btn bg-green-400 p-2 hover:bg-green-500" title="Fill">
-                                <i class="fas fa-fill-drip"></i>
-                            </button>
-                            <button id="undoBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500" title="Undo">
-                                <i class="fas fa-undo"></i>
-                            </button>
-                            <button id="redoBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500" title="Redo">
-                                <i class="fas fa-redo"></i>
-                            </button>
-                            <button id="clearBtn" class="hand-drawn-btn bg-red-400 p-2 hover:bg-red-500" title="Clear Canvas">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div class="relative group">
+                                <button id="fillBtn" class="hand-drawn-btn bg-green-400 p-2 hover:bg-green-500">
+                                    <i class="fas fa-fill-drip"></i>
+                                </button>
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Fill Tool (Toggle)
+                                </span>
+                            </div>
+                            <div class="relative group">
+                                <button id="undoBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Undo Last Action
+                                </span>
+                            </div>
+                            <div class="relative group">
+                                <button id="redoBtn" class="hand-drawn-btn bg-gray-400 p-2 hover:bg-gray-500">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Redo Last Action
+                                </span>
+                            </div>
+                            <div class="relative group">
+                                <button id="clearBtn" class="hand-drawn-btn bg-red-400 p-2 hover:bg-red-500">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <span class="tooltip-text absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-sm py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Clear Canvas
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
