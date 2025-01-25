@@ -34,6 +34,12 @@ A real-time multiplayer drawing and guessing game built with PeerJS, featuring a
   - Responsive design
   - Touch screen support
   - Color-coded timers
+- **Replay system**
+  - Full game replay after completion
+  - VCR-style controls (play/pause/prev/next)
+  - Adjustable playback speed (0.5x to 4x)
+  - Progress bar with seek functionality
+  - Chat replay synchronized with drawings
 
 ## How to Play
 
