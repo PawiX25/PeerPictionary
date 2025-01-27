@@ -2362,12 +2362,44 @@ function createReplayViewer(recording) {
         nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
     }
     
+    function compressInactivePeriods(actions, threshold = 1000, compressedGap = 200) {
+        if (!actions || actions.length === 0) return actions;
+    
+        const compressed = [];
+        let adjustedTime = 0;
+        let prevOriginalTime = actions[0].timestamp;
+    
+        compressed.push({
+            ...actions[0],
+            timestamp: adjustedTime
+        });
+    
+        for (let i = 1; i < actions.length; i++) {
+            const action = actions[i];
+            const originalGap = action.timestamp - prevOriginalTime;
+    
+            let gap = originalGap > threshold ? compressedGap : originalGap;
+            adjustedTime += gap;
+            prevOriginalTime = action.timestamp;
+    
+            compressed.push({
+                ...action,
+                timestamp: adjustedTime
+            });
+        }
+    
+        return compressed;
+    }
+
     function playRound() {
         const round = recording.rounds[currentRoundIndex];
         if (!round || !round.actions || round.actions.length === 0) {
             console.warn('No actions to replay for this round');
             return;
         }
+
+        const compressedActions = compressInactivePeriods(round.actions);
+        const totalDuration = compressedActions[compressedActions.length - 1].timestamp;
 
         replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
         replayChat.innerHTML = '';
@@ -2376,7 +2408,6 @@ function createReplayViewer(recording) {
         if (!startTime) startTime = performance.now() - (currentTime / playbackSpeed);
 
         const progressBar = replayContainer.querySelector('#replayProgress');
-        const totalDuration = round.actions[round.actions.length - 1].timestamp;
 
         function animate(timestamp) {
             currentTime = (timestamp - startTime) * playbackSpeed;
@@ -2384,14 +2415,14 @@ function createReplayViewer(recording) {
             const progress = Math.min((currentTime / totalDuration) * 100, 100);
             progressBar.style.width = `${progress}%`;
             
-            while (lastActionIndex < round.actions.length && 
-                   round.actions[lastActionIndex].timestamp <= currentTime) {
-                const action = round.actions[lastActionIndex];
+            while (lastActionIndex < compressedActions.length && 
+                   compressedActions[lastActionIndex].timestamp <= currentTime) {
+                const action = compressedActions[lastActionIndex];
                 executeReplayAction(action, replayCtx, replayChat);
                 lastActionIndex++;
             }
             
-            if (lastActionIndex < round.actions.length && isPlaying) {
+            if (lastActionIndex < compressedActions.length && isPlaying) {
                 requestAnimationFrame(animate);
             } else {
                 isPlaying = false;
@@ -2409,10 +2440,11 @@ function createReplayViewer(recording) {
         const round = recording.rounds[currentRoundIndex];
         if (!round || !round.actions || round.actions.length === 0) return;
 
+        const compressedActions = compressInactivePeriods(round.actions);
         const rect = progressContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const percentage = clickX / rect.width;
-        const totalDuration = round.actions[round.actions.length - 1].timestamp;
+        const totalDuration = compressedActions[compressedActions.length - 1].timestamp;
         
         currentTime = totalDuration * percentage;
         startTime = performance.now() - (currentTime / playbackSpeed);
@@ -2420,7 +2452,7 @@ function createReplayViewer(recording) {
         replayCtx.clearRect(0, 0, replayCtx.canvas.width, replayCtx.canvas.height);
         replayChat.innerHTML = '';
         
-        for (const action of round.actions) {
+        for (const action of compressedActions) {
             if (action.timestamp <= currentTime) {
                 executeReplayAction(action, replayCtx, replayChat);
             }
