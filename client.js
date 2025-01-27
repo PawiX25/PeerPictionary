@@ -467,16 +467,22 @@ function handleMessage(data) {
             }
             break;
         case 'canvas_state':
-            if (!isDrawer) {
-                const img = new Image();
-                img.src = data.state;
-                img.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                    if (isHost) {
-                        sendData(data);
-                    }
-                };
+            if (isHost && gameRecording.currentRound) {
+                recordAction({
+                    type: 'canvas_state',
+                    state: data.state
+                });
+            }
+
+            const img = new Image();
+            img.src = data.state;
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+
+            if (isHost) {
+                sendData(data);
             }
             break;
         case 'clear_canvas':
@@ -1135,9 +1141,18 @@ function undo() {
     
     const operation = undoStack.pop();
     redoStack.push(operation);
-    
+
     redrawCanvas();
-    sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+
+    const newState = canvas.toDataURL();
+    sendData({ type: 'canvas_state', state: newState });
+
+    if (isHost && gameRecording.currentRound) {
+        recordAction({
+            type: 'canvas_state',
+            state: newState
+        });
+    }
 }
 
 function redo() {
@@ -1145,9 +1160,18 @@ function redo() {
     
     const operation = redoStack.pop();
     undoStack.push(operation);
-    
+
     redrawCanvas();
-    sendData({ type: 'canvas_state', state: canvas.toDataURL() });
+
+    const newState = canvas.toDataURL();
+    sendData({ type: 'canvas_state', state: newState });
+
+    if (isHost && gameRecording.currentRound) {
+        recordAction({
+            type: 'canvas_state',
+            state: newState
+        });
+    }
 }
 
 function redrawCanvas() {
@@ -2300,6 +2324,14 @@ function createReplayViewer(recording) {
                 div.className = 'mb-2 p-2 hand-drawn bg-gray-50';
                 chat.appendChild(div);
                 chat.scrollTop = chat.scrollHeight;
+                break;
+            case 'canvas_state':
+                const replayImg = new Image();
+                replayImg.src = action.state;
+                replayImg.onload = () => {
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    ctx.drawImage(replayImg, 0, 0);
+                };
                 break;
         }
     }
