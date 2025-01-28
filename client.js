@@ -2265,6 +2265,7 @@ function createReplayViewer(recording) {
     let playbackSpeed = 1;
     let startTime = 0;
     let currentTime = 0;
+    let currentAnimationFrameId = null;
     const replayCtx = replayContainer.querySelector('#replayCanvas').getContext('2d');
     const replayChat = replayContainer.querySelector('#replayChat');
     const infoDisplay = replayContainer.querySelector('#replayInfo');
@@ -2405,9 +2406,12 @@ function createReplayViewer(recording) {
         replayChat.innerHTML = '';
         
         let lastActionIndex = 0;
-        if (!startTime) startTime = performance.now() - (currentTime / playbackSpeed);
+        if (!startTime) {
+            startTime = performance.now() - (currentTime / playbackSpeed);
+        }
 
         const progressBar = replayContainer.querySelector('#replayProgress');
+        progressBar.style.width = '0%';
 
         function animate(timestamp) {
             currentTime = (timestamp - startTime) * playbackSpeed;
@@ -2423,15 +2427,16 @@ function createReplayViewer(recording) {
             }
             
             if (lastActionIndex < compressedActions.length && isPlaying) {
-                requestAnimationFrame(animate);
+                currentAnimationFrameId = requestAnimationFrame(animate);
             } else {
                 isPlaying = false;
+                currentAnimationFrameId = null;
                 updatePlayPauseButton();
             }
         }
         
         if (isPlaying) {
-            requestAnimationFrame(animate);
+            currentAnimationFrameId = requestAnimationFrame(animate);
         }
     }
 
@@ -2473,9 +2478,14 @@ function createReplayViewer(recording) {
     }
     
     replayContainer.querySelector('#replayPlayPause').onclick = () => {
+        if (currentAnimationFrameId) {
+            cancelAnimationFrame(currentAnimationFrameId);
+            currentAnimationFrameId = null;
+        }
+
         isPlaying = !isPlaying;
         if (isPlaying) {
-            startTime = 0;
+            startTime = performance.now() - (currentTime / playbackSpeed);
             playRound();
         }
         updatePlayPauseButton();
@@ -2483,6 +2493,11 @@ function createReplayViewer(recording) {
     
     replayContainer.querySelector('#replayPrevRound').onclick = () => {
         if (currentRoundIndex > 0) {
+            if (currentAnimationFrameId) {
+                cancelAnimationFrame(currentAnimationFrameId);
+                currentAnimationFrameId = null;
+            }
+
             isPlaying = false;
             currentRoundIndex--;
             startTime = 0;
@@ -2501,6 +2516,11 @@ function createReplayViewer(recording) {
     
     replayContainer.querySelector('#replayNextRound').onclick = () => {
         if (currentRoundIndex < recording.rounds.length - 1) {
+            if (currentAnimationFrameId) {
+                cancelAnimationFrame(currentAnimationFrameId);
+                currentAnimationFrameId = null;
+            }
+
             isPlaying = false;
             currentRoundIndex++;
             startTime = 0;
@@ -2520,7 +2540,11 @@ function createReplayViewer(recording) {
     replayContainer.querySelector('#replaySpeed').onchange = (e) => {
         playbackSpeed = parseFloat(e.target.value);
         if (isPlaying) {
-            startTime = 0;
+            if (currentAnimationFrameId) {
+                cancelAnimationFrame(currentAnimationFrameId);
+                currentAnimationFrameId = null;
+            }
+            startTime = performance.now() - (currentTime / playbackSpeed);
             playRound();
         }
     };
